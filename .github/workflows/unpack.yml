@@ -3,7 +3,7 @@ name: Import source archive
 on:
   push:
     paths:
-      - scenario-qa-app-source.zip
+      - scenario-qa-app-source.b64
 
 permissions:
   contents: write
@@ -16,10 +16,11 @@ jobs:
       - name: Expand tracked source
         shell: bash
         run: |
+          base64 --decode scenario-qa-app-source.b64 > /tmp/scenario-qa-app-source.zip
           mkdir .source
-          unzip -q scenario-qa-app-source.zip -d .source
+          unzip -q /tmp/scenario-qa-app-source.zip -d .source
           cp -a .source/. .
-          rm -rf .source scenario-qa-app-source.zip .github/workflows/unpack.yml
+          rm -rf .source scenario-qa-app-source.b64 .github/workflows/unpack.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
