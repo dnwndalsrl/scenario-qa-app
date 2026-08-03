@@ -219,13 +219,39 @@ Replicas=1
 실제 계정 작업이 끝날 때 아래 값을 채운다. 로그인, GitHub 권한 승인, 공개 endpoint 발급 전에는 빈 값을 성공으로 해석하지 않는다.
 
 ```text
-NORTHFLANK_PROJECT=
+NORTHFLANK_PROJECT=scenario-qa-sandbox
 NORTHFLANK_SERVICE=
 NORTHFLANK_PUBLIC_URL=
 DEPLOY_BRANCH=main
-DEPLOY_COMMIT=
+DEPLOY_COMMIT=57086d0d181809c28c1586be71f773ac0c5d7995
 PERSISTENT_STORAGE_AVAILABLE=UNVERIFIED
 PLAYWRIGHT_AVAILABLE=UNVERIFIED
 CRON_AVAILABLE=UNVERIFIED
-FINAL_STATUS=BLOCKED_PENDING_USER_LOGIN
+FINAL_STATUS=BLOCKED_CARD_VERIFICATION_REQUIRED
+```
+
+## 2026-08-03 실제 배포 시도 결과
+
+- GitHub 비공개 저장소 `dnwndalsrl/scenario-qa-app`를 생성하고 `main` 브랜치에 소스를 반영했다.
+- Northflank GitHub App은 이 저장소 한 개에만 접근하도록 제한했다.
+- 무료 Northflank 프로젝트 `scenario-qa-sandbox`를 `europe-west2`(London)에 생성했다.
+- Combined Service `scenario-qa-app`의 Dockerfile, 무료 컴퓨트 사양, 공개 HTTP 3000 포트, 인증 환경 변수, 데모 모드 및 `/api/health/live` readiness probe 설정을 완료했다.
+- 서비스 생성 제출 시 Northflank가 카드 등록 모달을 표시했다. 화면에는 Developer Sandbox 사용 중 과금되지 않는다고 안내되지만, 카드 등록은 이 배포의 명시적 금지 조건이므로 등록하지 않았다.
+- `p01--scenario-qa-app--msq285yxpyvl.code.run`은 설정 화면에서 예약된 도메인일 뿐 서비스가 생성되지 않았으므로 공개 배포 주소로 간주하지 않는다.
+- 서비스와 컨테이너가 생성되지 않아 HTTPS, Nuxt API, Chromium, 실패 스크린샷, 재시작, 재배포, volume 및 cron 검증은 수행할 수 없었다.
+
+```text
+NORTHFLANK_TEAM=dnwndalsrls-team
+NORTHFLANK_PROJECT=scenario-qa-sandbox
+NORTHFLANK_SERVICE=
+NORTHFLANK_PUBLIC_URL=
+NORTHFLANK_RESERVED_URL=https://p01--scenario-qa-app--msq285yxpyvl.code.run
+GITHUB_REPOSITORY=https://github.com/dnwndalsrl/scenario-qa-app
+REGION=europe-west2
+DEPLOY_BRANCH=main
+DEPLOY_COMMIT=57086d0d181809c28c1586be71f773ac0c5d7995
+PERSISTENT_STORAGE_AVAILABLE=UNVERIFIED
+PLAYWRIGHT_AVAILABLE=UNVERIFIED
+CRON_AVAILABLE=UNVERIFIED
+FINAL_STATUS=BLOCKED_CARD_VERIFICATION_REQUIRED
 ```
