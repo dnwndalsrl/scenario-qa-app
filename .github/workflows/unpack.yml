@@ -1,0 +1,27 @@
+name: Import source archive
+
+on:
+  push:
+    paths:
+      - scenario-qa-app-source.zip
+
+permissions:
+  contents: write
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand tracked source
+        shell: bash
+        run: |
+          mkdir .source
+          unzip -q scenario-qa-app-source.zip -d .source
+          cp -a .source/. .
+          rm -rf .source scenario-qa-app-source.zip .github/workflows/unpack.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import scenario QA application source"
+          git push
