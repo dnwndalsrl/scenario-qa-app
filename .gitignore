@@ -36,3 +36,4 @@ scenario-qa-app/.target-*.log
 
 # Historical starter copy is not part of the deployable monorepo
 starter-code/
+.northflank-cli/
