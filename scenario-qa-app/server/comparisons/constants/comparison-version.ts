@@ -1,0 +1,1 @@
+export const DEFAULT_TEST_RUN_COMPARISON_VERSION = "v1";

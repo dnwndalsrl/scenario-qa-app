@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/test-scenario.schema.json",
+  "title": "AI Web QA Test Scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "baseUrl",
+    "startUrl",
+    "viewport",
+    "stopOnRequiredFailure",
+    "variables",
+    "steps"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "startUrl": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "viewport": {
+      "$ref": "#/$defs/viewport"
+    },
+    "stopOnRequiredFailure": {
+      "type": "boolean"
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 10000
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "$defs": {
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "width", "height"],
+      "properties": {
+        "type": {
+          "enum": ["desktop", "mobile"]
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 320,
+          "maximum": 3840
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 480,
+          "maximum": 2160
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["humanName", "source"],
+      "properties": {
+        "humanName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "source": {
+          "enum": ["user", "ai", "recorded"]
+        },
+        "testId": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "role": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "name"],
+          "properties": {
+            "value": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 300
+            }
+          }
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "placeholder": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "css": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "xpath": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "order",
+        "action",
+        "description",
+        "required"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "action": {
+          "enum": [
+            "goto",
+            "click",
+            "fill",
+            "select",
+            "check",
+            "radio",
+            "assert_text",
+            "assert_visible",
+            "assert_url",
+            "assert_modal",
+            "assert_enabled",
+            "assert_api_ok",
+            "assert_no_console_error"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "expectedStatus": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "value": {
+          "type": ["string", "boolean"],
+          "maxLength": 10000
+        },
+        "sensitive": {
+          "type": "boolean"
+        },
+        "expected": {
+          "type": ["string", "boolean"],
+          "maxLength": 10000
+        },
+        "match": {
+          "enum": ["exact", "contains"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "goto"
+              }
+            }
+          },
+          "then": {
+            "required": ["url"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": ["click", "assert_visible", "check", "radio"]
+              }
+            }
+          },
+          "then": {
+            "required": ["target"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": ["fill", "select"]
+              }
+            }
+          },
+          "then": {
+            "required": ["target", "value"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "assert_text",
+                  "assert_modal",
+                  "assert_enabled"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": ["target", "expected"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "assert_url"
+              }
+            }
+          },
+          "then": {
+            "required": ["expected", "match"]
+          }
+        }
+      ]
+    }
+  }
+}

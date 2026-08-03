@@ -1,0 +1,83 @@
+{
+  "id": "login-success",
+  "name": "로그인 성공",
+  "description": "테스트 계정으로 로그인한 뒤 대시보드 이동과 제목 노출을 확인한다.",
+  "startUrl": "{{TEST_BASE_URL}}",
+  "stopOnFailure": true,
+  "timeout": 90000,
+  "steps": [
+    {
+      "id": "goto-login",
+      "order": 1,
+      "name": "로그인 페이지로 이동",
+      "action": "goto",
+      "value": "/login",
+      "timeout": 30000,
+      "required": true
+    },
+    {
+      "id": "fill-login-id",
+      "order": 2,
+      "name": "아이디 입력",
+      "action": "fill",
+      "target": {
+        "strategy": "testId",
+        "value": "login-id"
+      },
+      "value": "{{TEST_LOGIN_ID}}",
+      "timeout": 15000,
+      "required": true
+    },
+    {
+      "id": "fill-login-password",
+      "order": 3,
+      "name": "비밀번호 입력",
+      "action": "fill",
+      "target": {
+        "strategy": "label",
+        "value": "비밀번호"
+      },
+      "value": "{{TEST_LOGIN_PASSWORD}}",
+      "sensitive": true,
+      "timeout": 15000,
+      "required": true
+    },
+    {
+      "id": "click-login",
+      "order": 4,
+      "name": "로그인 버튼 클릭",
+      "action": "click",
+      "target": {
+        "strategy": "role",
+        "value": "button",
+        "name": "로그인"
+      },
+      "timeout": 15000,
+      "required": true
+    },
+    {
+      "id": "assert-dashboard-url",
+      "order": 5,
+      "name": "대시보드 URL 확인",
+      "action": "assert_url",
+      "expected": {
+        "operator": "contains",
+        "value": "/dashboard"
+      },
+      "timeout": 15000,
+      "required": true
+    },
+    {
+      "id": "assert-dashboard-title",
+      "order": 6,
+      "name": "대시보드 제목 노출 확인",
+      "action": "assert_visible",
+      "target": {
+        "strategy": "testId",
+        "value": "dashboard-title"
+      },
+      "timeout": 15000,
+      "required": true
+    }
+  ]
+}
