@@ -12,7 +12,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     items: analyses.error ? [] : (analyses.data || []).map(rowToAnalysis),
-    usage: usage.data,
-    analysisWarning: analyses.error ? { code: analyses.error.code, message: analyses.error.message } : null
+    usage: usage.data
   };
 });
