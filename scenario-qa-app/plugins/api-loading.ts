@@ -1,3 +1,5 @@
+import { useApiLoading } from "~/composables/useApiLoading";
+
 export default defineNuxtPlugin(() => {
   const { pendingCount } = useApiLoading();
   const trackedRequests = new WeakSet<object>();
