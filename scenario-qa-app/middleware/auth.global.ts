@@ -1,3 +1,5 @@
+import { useAuthSession } from "~/composables/useAuthSession";
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path === "/login") return;
   const session = useAuthSession();
