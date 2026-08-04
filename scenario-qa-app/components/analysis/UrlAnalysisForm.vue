@@ -15,12 +15,12 @@ defineProps<{ loading?: boolean }>();
 <template>
   <form class="analysis-form card" @submit.prevent="submit">
     <label class="field-label" for="analysis-url">테스트할 페이지 URL</label>
-    <div class="url-row"><el-input id="analysis-url" v-model="url" size="large" placeholder="https://example.com" clearable data-testid="analysis-url-input" /><button class="primary-button" type="submit" :disabled="loading" data-testid="start-analysis-button">{{ loading ? "분석을 준비하는 중…" : "AI QA 분석 시작" }}</button></div>
+    <div class="url-row"><input id="analysis-url" v-model="url" class="url-input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" data-testid="analysis-url-input"><button class="primary-button" type="submit" :disabled="loading" data-testid="start-analysis-button">{{ loading ? "분석을 준비하는 중…" : "AI QA 분석 시작" }}</button></div>
     <p v-if="error" class="error-box" role="alert">{{ error }}</p>
     <fieldset class="scope-picker"><legend>분석 범위</legend><label :class="{ selected: mode === 'single_page' }"><input v-model="mode" type="radio" value="single_page"> 현재 페이지 1개</label><label :class="{ selected: mode === 'site_crawl' }"><input v-model="mode" type="radio" value="site_crawl"> 동일 사이트 주요 페이지</label></fieldset>
     <div v-if="mode === 'site_crawl'" class="crawl-options">
-      <label>최대 분석 페이지<el-input-number v-model="maxPages" :min="1" :max="5" /></label><label>최대 탐색 깊이<el-input-number v-model="maxDepth" :min="0" :max="2" /></label>
-      <label class="switch-option">Query URL 포함<el-switch v-model="includeQueryUrls" /></label><label class="switch-option">안전한 테스트 자동 실행<el-switch v-model="autoRunSafeTests" /></label>
+      <label>최대 분석 페이지<input v-model.number="maxPages" class="number-input" type="number" min="1" max="5"></label><label>최대 탐색 깊이<input v-model.number="maxDepth" class="number-input" type="number" min="0" max="2"></label>
+      <label class="switch-option">Query URL 포함<span class="switch-control"><input v-model="includeQueryUrls" type="checkbox"><span aria-hidden="true"></span></span></label><label class="switch-option">안전한 테스트 자동 실행<span class="switch-control"><input v-model="autoRunSafeTests" type="checkbox"><span aria-hidden="true"></span></span></label>
       <p>동일한 origin 안에서 최대 {{ maxPages }}개의 주요 페이지를 탐색합니다. 삭제, 결제, 로그아웃 등 위험 가능성이 있는 링크는 자동으로 제외됩니다.</p>
     </div>
     <div class="option-grid"><div class="option"><strong>읽기 전용 탐색</strong><span>로그인·등록·수정·삭제·결제 흐름은 실행하지 않습니다.</span></div><div class="option"><strong>권한 있는 사이트만</strong><span>사용자가 소유하거나 테스트 권한이 있는 사이트에서만 사용하세요.</span></div></div>
