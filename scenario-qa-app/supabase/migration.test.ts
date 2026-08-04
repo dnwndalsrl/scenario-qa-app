@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 const sql = readFileSync(new URL("./migrations/202608040001_initial_qa_schema.sql", import.meta.url), "utf8");
 const grantsSql = readFileSync(new URL("./migrations/202608040002_authenticated_table_grants.sql", import.meta.url), "utf8");
+const staleSql = readFileSync(new URL("./migrations/202608040003_expire_stale_analysis.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -17,5 +18,11 @@ describe("Supabase migration security", () => {
     expect(grantsSql).toContain("public.analyses");
     expect(grantsSql).toContain("grant delete on table public.analyses to authenticated");
     expect(grantsSql).not.toContain("grant insert on table");
+  });
+  it("expires only the signed-in user's stale analysis through a constrained RPC", () => {
+    expect(staleSql).toContain("security definer");
+    expect(staleSql).toContain("user_id = auth.uid()");
+    expect(staleSql).toContain("updated_at < now() - interval '15 minutes'");
+    expect(staleSql).toContain("grant execute on function public.expire_stale_analysis(uuid) to authenticated");
   });
 });
