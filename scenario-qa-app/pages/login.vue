@@ -1,12 +1,13 @@
 <script setup lang="ts">
 definePageMeta({ layout: false });
 const config = useRuntimeConfig(); const route = useRoute(); const email = ref(""); const password = ref(""); const loading = ref(false); const error = ref(""); const message = ref("");
+const session = useAuthSession();
 async function submit(kind: "login" | "signup") {
   loading.value = true; error.value = ""; message.value = "";
   try {
-    const result = await $fetch<any>(`/api/auth/${kind}`, { method: "POST", body: { email: email.value, password: password.value } });
+    const result = await $fetch<{ confirmationRequired?: boolean; user?: { id: string; email?: string } }>(`/api/auth/${kind}`, { method: "POST", body: { email: email.value, password: password.value } });
     if (kind === "signup" && result.confirmationRequired) message.value = "인증 메일을 확인한 뒤 로그인해 주세요.";
-    else await navigateTo(typeof route.query.redirect === "string" ? route.query.redirect : "/");
+    else { session.value = { authenticated: true, user: result.user ?? null }; await navigateTo(typeof route.query.redirect === "string" ? route.query.redirect : "/"); }
   } catch (cause: any) { error.value = cause?.data?.statusMessage || cause?.message || "요청에 실패했습니다."; }
   finally { loading.value = false; }
 }
