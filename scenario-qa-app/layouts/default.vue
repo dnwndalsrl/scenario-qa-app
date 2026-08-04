@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAuthSession } from "~/composables/useAuthSession";
+
 const session = useAuthSession();
 async function logout(){ await $fetch("/api/auth/logout", { method: "POST" }); session.value = { authenticated: false, user: null }; await navigateTo("/login"); }
 </script>
