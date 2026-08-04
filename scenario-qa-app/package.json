@@ -19,7 +19,6 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.0",
-    "element-plus": "^2.11.1",
     "nuxt": "^4.0.3",
     "vue": "^3.5.18",
     "vue-bundle-renderer": "^2.3.1",
