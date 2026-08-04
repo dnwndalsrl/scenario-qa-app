@@ -1,6 +1,71 @@
 <script setup lang="ts">
-import type { AnalysisDetail } from "~/shared/types/analysis"; const route=useRoute(); const { $api }=useNuxtApp(); const endpoint=computed(()=>`/api/analyses/${route.params.analysisId}`); const terminal=["completed","partially_completed","failed"]; const busy=ref(false); const actionError=ref(""); const{data,refresh,error}=await useFetch<AnalysisDetail>(endpoint,{ $fetch:$api }); let timer:ReturnType<typeof setInterval>|undefined;
-onMounted(()=>{timer=setInterval(async()=>{if(data.value&&!terminal.includes(data.value.analysis.status))await refresh()},3000)}); onBeforeUnmount(()=>{if(timer)clearInterval(timer)});
+import type { AnalysisDetail } from "~/shared/types/analysis";
+
+const route = useRoute();
+const { $api } = useNuxtApp();
+const endpoint = computed(() => `/api/analyses/${route.params.analysisId}`);
+const terminal = ["completed", "partially_completed", "failed"];
+const pollIntervalMs = 5000;
+const maxIdleMs = 16 * 60 * 1000;
+const maxConsecutiveErrors = 3;
+const busy = ref(false);
+const actionError = ref("");
+const pollingStopped = ref(false);
+const { data, refresh, error } = await useFetch<AnalysisDetail>(endpoint, { $fetch: $api });
+let timer: ReturnType<typeof setTimeout> | undefined;
+let refreshing = false;
+let consecutiveErrors = 0;
+
+function stopPolling(message = "") {
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+  pollingStopped.value = true;
+  if (message) actionError.value = message;
+}
+
+function schedulePoll() {
+  if (timer || pollingStopped.value || !data.value || terminal.includes(data.value.analysis.status)) return;
+  timer = setTimeout(poll, pollIntervalMs);
+}
+
+async function poll() {
+  timer = undefined;
+  if (!data.value || terminal.includes(data.value.analysis.status)) return;
+  const updatedAt = Date.parse(data.value.analysis.updatedAt);
+  if (Number.isFinite(updatedAt) && Date.now() - updatedAt > maxIdleMs) {
+    stopPolling("16분 이상 상태 변경이 없어 자동 조회를 중단했습니다. 취소하거나 다시 분석해 주세요.");
+    return;
+  }
+  if (document.visibilityState !== "visible" || refreshing) {
+    schedulePoll();
+    return;
+  }
+  refreshing = true;
+  try {
+    await refresh();
+    consecutiveErrors = error.value ? consecutiveErrors + 1 : 0;
+  } finally {
+    refreshing = false;
+  }
+  if (consecutiveErrors >= maxConsecutiveErrors) {
+    stopPolling("연속된 조회 오류로 자동 조회를 중단했습니다. 잠시 후 페이지를 새로고침해 주세요.");
+    return;
+  }
+  schedulePoll();
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === "visible") schedulePoll();
+}
+
+onMounted(() => {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  schedulePoll();
+});
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+});
 async function retry(){busy.value=true;actionError.value="";try{const result=await $api<{analysisId:string}>(`${endpoint.value}/retry`,{method:"POST"});await navigateTo(`/analyses/${result.analysisId}`)}catch(cause:any){actionError.value=cause?.data?.statusMessage||cause?.message||"재실행 요청에 실패했습니다."}finally{busy.value=false}}
 async function cancel(){busy.value=true;try{await $api(`${endpoint.value}/cancel`,{method:"POST"});await refresh()}catch(cause:any){actionError.value=cause?.data?.statusMessage||cause?.message||"취소 요청에 실패했습니다."}finally{busy.value=false}}
 </script>
