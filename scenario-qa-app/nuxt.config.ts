@@ -22,8 +22,9 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: process.env.VERCEL ? "vercel" : "node-server",
-    // Self-contained Vercel function: no dependency tracing can copy the QA engine.
-    externals: { trace: false, inline: [/.*/] }
+    // Keep the bundle self-contained where possible, and trace any runtime-only
+    // imports so Vercel includes them in the serverless function package.
+    externals: { trace: true, inline: [/.*/] }
   },
   app: {
     head: {
