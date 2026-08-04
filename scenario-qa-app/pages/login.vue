@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAuthSession } from "~/composables/useAuthSession";
+
 definePageMeta({ layout: false });
 const config = useRuntimeConfig(); const route = useRoute(); const email = ref(""); const password = ref(""); const loading = ref(false); const error = ref(""); const message = ref("");
 const session = useAuthSession();
