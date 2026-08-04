@@ -9,11 +9,11 @@ export default defineEventHandler(async (event) => {
     client.rpc("get_usage_summary")
   ]);
 
-  if (analyses.error) throw createError({ statusCode: 500, statusMessage: "분석 목록 조회에 실패했습니다." });
   if (usage.error) throw createError({ statusCode: 500, statusMessage: "사용량을 조회하지 못했습니다." });
 
   return {
-    items: (analyses.data || []).map(rowToAnalysis),
-    usage: usage.data
+    items: analyses.error ? [] : (analyses.data || []).map(rowToAnalysis),
+    usage: usage.data,
+    analysisWarning: analyses.error ? { code: analyses.error.code, message: analyses.error.message } : null
   };
 });
