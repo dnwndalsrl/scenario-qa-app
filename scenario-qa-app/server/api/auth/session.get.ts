@@ -1,10 +1,5 @@
-import { authEnabled, getSession } from "../../auth/auth.js";
-
-export default defineEventHandler((event) => {
-  const session = getSession(event);
-  return {
-    enabled: authEnabled(),
-    authenticated: session !== null,
-    username: session?.username ?? null
-  };
+import { createUserSupabaseClient } from "../../services/supabase.service";
+export default defineEventHandler(async (event) => {
+  const { data } = await createUserSupabaseClient(event).auth.getUser();
+  return { authenticated: Boolean(data.user), user: data.user ? { id: data.user.id, email: data.user.email } : null };
 });

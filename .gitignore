@@ -2,6 +2,7 @@
 **/node_modules/
 **/.nuxt/
 **/.output/
+**/.vercel/
 **/coverage/
 **/playwright-report/
 **/test-results/
@@ -9,10 +10,13 @@
 # Runtime data must never be committed
 **/storage/
 **/artifacts/
+!**/server/api/**/artifacts/
+!**/server/api/**/artifacts/**
 **/data/
 **/logs/
 **/backups/
 **/.deploy-state/
+**/.supabase/
 **/*.log
 
 # Secrets and local configuration

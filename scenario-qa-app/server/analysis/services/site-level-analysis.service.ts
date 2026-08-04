@@ -1,0 +1,19 @@
+import type { AiPageAnalysis, AiSiteAnalysis, CrawledPage, SiteMap } from "../../../shared/types/analysis";
+import { aiSiteAnalysisResponseSchema } from "../../../shared/schemas/analysis";
+import { getAnalysisConfig } from "../../config";
+import { createId } from "../../utils/id";
+import { SITE_ANALYSIS_SYSTEM_PROMPT } from "../prompts/site-analysis.prompt";
+import { requestStructuredJson } from "./openai-json.service";
+
+export async function analyzeSiteWithAi(analysisId: string, entryUrl: string, pages: CrawledPage[], analyses: AiPageAnalysis[], siteMap: SiteMap): Promise<AiSiteAnalysis> {
+  const config = getAnalysisConfig(); const pageIds = new Set(pages.map((page) => page.id));
+  const input = { entryUrl, pages: pages.map((page) => ({ pageId: page.id, url: page.finalUrl || page.normalizedUrl, depth: page.depth, title: page.title, status: page.status, pageType: analyses.find((item) => item.pageId === page.id)?.pageType, purpose: analyses.find((item) => item.pageId === page.id)?.pagePurpose, functions: analyses.find((item) => item.pageId === page.id)?.primaryFunctions.map((item) => item.name), errorCount: page.error ? 1 : 0, generatedTestCount: page.generatedTestIds.length })), edges: siteMap.edges.filter((edge) => edge.followed).map(({ fromPageId, toPageId, linkText }) => ({ fromPageId, toPageId, linkText })) };
+  const raw = await requestStructuredJson({ apiKey: config.openaiApiKey, model: config.pageAnalysisModel, system: SITE_ANALYSIS_SYSTEM_PROMPT, input, schema: aiSiteAnalysisResponseSchema, schemaName: "site_analysis", failureCode: "SITE_ANALYSIS_FAILED", invalidCode: "SITE_ANALYSIS_FAILED" });
+  const valid = (ids: string[]) => ids.filter((id) => pageIds.has(id));
+  return { id: createId("site-analysis"), analysisId, ...raw, primaryUserFlows: raw.primaryUserFlows.map((flow) => ({ ...flow, id: createId("flow"), pageIds: valid(flow.pageIds) })).filter((flow) => flow.pageIds.length > 0), mainPageGroups: raw.mainPageGroups.map((group) => ({ ...group, id: createId("group"), pageIds: valid(group.pageIds) })).filter((group) => group.pageIds.length > 0), risks: raw.risks.map((risk) => ({ ...risk, id: createId("site-risk"), pageIds: valid(risk.pageIds) })), generatedAt: new Date().toISOString() };
+}
+export function buildSiteLevelAnalysis(analysisId: string, pages: CrawledPage[], analyses: AiPageAnalysis[], siteMap: SiteMap): AiSiteAnalysis {
+  const groups = new Map<string, string[]>(); for (const item of analyses) groups.set(item.pageType, [...(groups.get(item.pageType) || []), item.pageId!]);
+  const entry = pages.find((page) => page.depth === 0); const purposes = analyses.map((item) => item.pagePurpose).filter(Boolean);
+  return { id: createId("site-analysis"), analysisId, sitePurpose: purposes[0] || entry?.title || "웹사이트 주요 페이지 품질 확인", primaryUserFlows: siteMap.edges.filter((edge) => edge.followed && edge.toPageId).slice(0, 5).map((edge, index) => ({ id: `flow-${index + 1}`, name: edge.linkText || "내부 페이지 이동", description: `${edge.targetUrl} 이동 경로`, pageIds: [edge.fromPageId, edge.toPageId!], confidence: .75, safetyLevel: "safe" })), mainPageGroups: [...groups].map(([pageType, pageIds], index) => ({ id: `group-${index + 1}`, name: `${pageType} 페이지`, pageType: pageType as any, pageIds })), coverageSummary: `${pages.filter((page) => page.status !== "skipped").length}개 페이지 중 ${analyses.length}개 페이지를 구조화 분석했습니다.`, risks: analyses.flatMap((item) => item.risks.filter((risk) => risk.severity === "high").map((risk) => ({ id: `${item.pageId}-${risk.id}`, title: risk.title, description: risk.description, severity: risk.severity, pageIds: [item.pageId!] }))), limitations: ["로그인과 상태 변경 동작은 탐색하지 않았습니다.", "사용자가 소유하거나 테스트 권한이 있는 사이트에서만 사용해야 합니다."], confidence: analyses.length ? analyses.reduce((sum, item) => sum + item.confidence, 0) / analyses.length : 0, generatedAt: new Date().toISOString() };
+}
