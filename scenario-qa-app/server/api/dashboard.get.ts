@@ -1,10 +1,11 @@
 import { rowToAnalysis } from "../services/analysis-records.service";
-import { requireUser } from "../services/supabase.service";
+import { createServiceSupabaseClient, requireUser } from "../services/supabase.service";
 
 export default defineEventHandler(async (event) => {
-  const { client } = await requireUser(event);
+  const { client, user } = await requireUser(event);
+  const serviceClient = createServiceSupabaseClient();
   const [analyses, usage] = await Promise.all([
-    client.from("analyses").select("*").order("created_at", { ascending: false }).limit(5),
+    serviceClient.from("analyses").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
     client.rpc("get_usage_summary")
   ]);
 
