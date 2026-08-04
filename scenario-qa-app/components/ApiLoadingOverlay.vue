@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useApiLoading } from "~/composables/useApiLoading";
+
 const { isLoading } = useApiLoading();
 </script>
 
