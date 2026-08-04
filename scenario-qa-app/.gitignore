@@ -6,6 +6,8 @@ node_modules/
 .env.*
 !.env.example
 storage/
+!server/storage/
+!server/storage/*.ts
 artifacts/
 coverage/
 playwright-report/
