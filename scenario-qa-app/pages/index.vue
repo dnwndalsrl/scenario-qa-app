@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { SiteAnalysis } from "~/shared/types/analysis";
 const router = useRouter(); const loading = ref(false); const error = ref("");
-const { data } = await useFetch<{ items: SiteAnalysis[] }>("/api/analyses", { default: () => ({ items: [] }) });
-const { data: usage } = await useFetch<{ dailyUsed: number; dailyLimit: number; active: number; concurrentLimit: number }>("/api/usage");
+interface UsageSummary { dailyUsed: number; dailyLimit: number; active: number; concurrentLimit: number }
+const { data } = await useFetch<{ items: SiteAnalysis[]; usage: UsageSummary | null }>("/api/dashboard", { default: () => ({ items: [], usage: null }) });
+const usage = computed(() => data.value.usage);
 async function start(payload: { url: string; options: Record<string, unknown> }) { loading.value=true; error.value=""; try { const result=await $fetch<{analysisId:string}>("/api/analyses",{method:"POST",body:payload}); await router.push(`/analyses/${result.analysisId}`); } catch(cause:any){ error.value=cause?.data?.statusMessage||cause?.data?.data?.message||cause?.message||"분석 요청에 실패했습니다."; } finally{loading.value=false;} }
 function label(status:string){return status==="completed"?"완료":status==="partially_completed"?"부분 완료":status==="failed"?"실패":"진행 중"}
 </script>
