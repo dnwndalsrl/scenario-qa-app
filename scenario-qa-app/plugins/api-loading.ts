@@ -1,4 +1,5 @@
 import { useApiLoading } from "~/composables/useApiLoading";
+import { useRequestHeaders } from "#app";
 
 export default defineNuxtPlugin(() => {
   const { pendingCount } = useApiLoading();
@@ -16,6 +17,7 @@ export default defineNuxtPlugin(() => {
   }
 
   const api = $fetch.create({
+    headers: import.meta.server ? useRequestHeaders(["cookie"]) : undefined,
     onRequest({ options }) { start(options); },
     onRequestError({ options }) { finish(options); },
     onResponse({ options }) { finish(options); },
