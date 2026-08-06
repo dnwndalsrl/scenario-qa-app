@@ -5,8 +5,9 @@ const source = readFileSync(new URL("../pages/analyses/[analysisId].vue", import
 
 describe("analysis detail live updates", () => {
   it("uses database change events instead of an API polling loop", () => {
-    expect(source).toContain('"postgres_changes"');
-    expect(source).toContain('table: "analyses"');
+    expect(source).toContain('"broadcast"');
+    expect(source).toContain('{ event: "UPDATE" }');
+    expect(source).toContain("config: { private: true }");
     expect(source).toContain("supabase.realtime.setAuth(sessionData.session.access_token)");
     expect(source).toContain("if (row.id === targetId) applyRealtimeUpdate(row)");
     expect(source).toContain("watch(");

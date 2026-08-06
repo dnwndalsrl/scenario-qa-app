@@ -104,12 +104,12 @@ async function startRealtime() {
   }
   await supabase.realtime.setAuth(sessionData.session.access_token);
   channel = supabase
-    .channel(`analysis:${targetId}`)
+    .channel(`analysis:${targetId}`, { config: { private: true } })
     .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "analyses" },
-      (payload) => {
-        const row = payload.new as Record<string, unknown>;
+      "broadcast",
+      { event: "UPDATE" },
+      (message) => {
+        const row = message.payload as Record<string, unknown>;
         if (row.id === targetId) applyRealtimeUpdate(row);
       }
     )
