@@ -1,72 +1,172 @@
 <script setup lang="ts">
-import type { AnalysisDetail } from "~/shared/types/analysis";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { AnalysisDetail, SiteAnalysisStatus } from "~/shared/types/analysis";
 
 const route = useRoute();
 const { $api } = useNuxtApp();
-const endpoint = computed(() => `/api/analyses/${route.params.analysisId}`);
+const analysisId = computed(() => String(route.params.analysisId));
+const endpoint = computed(() => `/api/analyses/${analysisId.value}`);
 const terminal = ["completed", "partially_completed", "failed"];
-const pollIntervalMs = 5000;
-const maxIdleMs = 16 * 60 * 1000;
-const maxConsecutiveErrors = 3;
+const staleAfterMs = 15 * 60 * 1000;
+const staleGraceMs = 5000;
 const busy = ref(false);
 const actionError = ref("");
-const pollingStopped = ref(false);
+const realtimeWarning = ref("");
 const { data, refresh, error } = await useFetch<AnalysisDetail>(endpoint, { $fetch: $api });
-let timer: ReturnType<typeof setTimeout> | undefined;
-let refreshing = false;
-let consecutiveErrors = 0;
 
-function stopPolling(message = "") {
-  if (timer) clearTimeout(timer);
-  timer = undefined;
-  pollingStopped.value = true;
-  if (message) actionError.value = message;
+let channel: RealtimeChannel | undefined;
+let staleTimer: ReturnType<typeof setTimeout> | undefined;
+let refreshPromise: Promise<void> | undefined;
+
+function isTerminal(status: string) {
+  return terminal.includes(status);
 }
 
-function schedulePoll() {
-  if (timer || pollingStopped.value || !data.value || terminal.includes(data.value.analysis.status)) return;
-  timer = setTimeout(poll, pollIntervalMs);
+function toClientStatus(status: unknown): SiteAnalysisStatus {
+  if (["queued", "dispatching", "dispatched"].includes(String(status))) return "pending";
+  if (["running", "cancel_requested"].includes(String(status))) return "launching_browser";
+  if (["cancelled", "dispatch_failed"].includes(String(status))) return "failed";
+  return String(status) as SiteAnalysisStatus;
 }
 
-async function poll() {
-  timer = undefined;
-  if (!data.value || terminal.includes(data.value.analysis.status)) return;
-  const updatedAt = Date.parse(data.value.analysis.updatedAt);
-  if (Number.isFinite(updatedAt) && Date.now() - updatedAt > maxIdleMs) {
-    stopPolling("16분 이상 상태 변경이 없어 자동 조회를 중단했습니다. 취소하거나 다시 분석해 주세요.");
-    return;
-  }
-  if (document.visibilityState !== "visible" || refreshing) {
-    schedulePoll();
-    return;
-  }
-  refreshing = true;
-  try {
+function clearStaleTimer() {
+  if (staleTimer) clearTimeout(staleTimer);
+  staleTimer = undefined;
+}
+
+function scheduleStaleCheck(updatedAt?: string) {
+  clearStaleTimer();
+  if (!data.value || isTerminal(data.value.analysis.status) || !updatedAt) return;
+  const updatedTime = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedTime)) return;
+  const delay = Math.max(0, updatedTime + staleAfterMs + staleGraceMs - Date.now());
+  staleTimer = setTimeout(() => void refreshDetail(), delay);
+}
+
+async function refreshDetail() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
     await refresh();
-    consecutiveErrors = error.value ? consecutiveErrors + 1 : 0;
-  } finally {
-    refreshing = false;
-  }
-  if (consecutiveErrors >= maxConsecutiveErrors) {
-    stopPolling("연속된 조회 오류로 자동 조회를 중단했습니다. 잠시 후 페이지를 새로고침해 주세요.");
-    return;
-  }
-  schedulePoll();
+    if (error.value) realtimeWarning.value = "최신 분석 상태를 불러오지 못했습니다. 잠시 후 직접 새로고침해 주세요.";
+    else if (data.value) scheduleStaleCheck(data.value.analysis.updatedAt);
+  })().finally(() => {
+    refreshPromise = undefined;
+  });
+  return refreshPromise;
 }
 
-function handleVisibilityChange() {
-  if (document.visibilityState === "visible") schedulePoll();
+function applyRealtimeUpdate(row: Record<string, unknown>) {
+  if (!data.value) return;
+  const status = toClientStatus(row.status);
+  data.value.analysis.status = status;
+  if (typeof row.progress === "number") data.value.analysis.progress = row.progress;
+  data.value.analysis.currentMessage = typeof row.current_message === "string" ? row.current_message : undefined;
+  data.value.analysis.updatedAt = typeof row.updated_at === "string" ? row.updated_at : data.value.analysis.updatedAt;
+  data.value.analysis.startedAt = typeof row.started_at === "string" ? row.started_at : data.value.analysis.startedAt;
+  data.value.analysis.completedAt = typeof row.completed_at === "string" ? row.completed_at : undefined;
+  data.value.analysis.error = row.error && typeof row.error === "object" ? row.error as AnalysisDetail["analysis"]["error"] : undefined;
+  scheduleStaleCheck(data.value.analysis.updatedAt);
+
+  // 진행 중에는 Realtime 행 데이터만 반영하고, 보고서가 완성된 시점에 상세 데이터를 한 번만 조회한다.
+  if (isTerminal(status)) {
+    stopRealtime();
+    void refreshDetail();
+  }
+}
+
+function stopRealtime() {
+  clearStaleTimer();
+  if (channel) void useSupabaseBrowser().removeChannel(channel);
+  channel = undefined;
 }
 
 onMounted(() => {
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-  schedulePoll();
+  if (!data.value || isTerminal(data.value.analysis.status)) return;
+  scheduleStaleCheck(data.value.analysis.updatedAt);
+  const supabase = useSupabaseBrowser();
+  channel = supabase
+    .channel(`analysis:${analysisId.value}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "analyses", filter: `id=eq.${analysisId.value}` },
+      (payload) => applyRealtimeUpdate(payload.new as Record<string, unknown>)
+    )
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        realtimeWarning.value = "";
+        // SSR 조회와 구독 시작 사이에 발생한 변경을 한 번만 동기화한다.
+        void refreshDetail();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        realtimeWarning.value = "실시간 상태 연결이 지연되고 있습니다. 필요하면 상태를 직접 새로고침해 주세요.";
+      }
+    });
 });
-onBeforeUnmount(() => {
-  if (timer) clearTimeout(timer);
-  document.removeEventListener("visibilitychange", handleVisibilityChange);
-});
-async function retry(){busy.value=true;actionError.value="";try{const result=await $api<{analysisId:string}>(`${endpoint.value}/retry`,{method:"POST"});await navigateTo(`/analyses/${result.analysisId}`)}catch(cause:any){actionError.value=cause?.data?.statusMessage||cause?.message||"재실행 요청에 실패했습니다."}finally{busy.value=false}}
-async function cancel(){busy.value=true;try{await $api(`${endpoint.value}/cancel`,{method:"POST"});await refresh()}catch(cause:any){actionError.value=cause?.data?.statusMessage||cause?.message||"취소 요청에 실패했습니다."}finally{busy.value=false}}
+
+onBeforeUnmount(stopRealtime);
+
+async function retry() {
+  busy.value = true;
+  actionError.value = "";
+  try {
+    const result = await $api<{ analysisId: string }>(`${endpoint.value}/retry`, { method: "POST" });
+    await navigateTo(`/analyses/${result.analysisId}`);
+  } catch (cause: any) {
+    actionError.value = cause?.data?.statusMessage || cause?.message || "재실행 요청에 실패했습니다.";
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function cancel() {
+  busy.value = true;
+  actionError.value = "";
+  try {
+    await $api(`${endpoint.value}/cancel`, { method: "POST" });
+    await refreshDetail();
+  } catch (cause: any) {
+    actionError.value = cause?.data?.statusMessage || cause?.message || "취소 요청에 실패했습니다.";
+  } finally {
+    busy.value = false;
+  }
+}
 </script>
-<template><div v-if="data"><header class="report-head"><div><p class="eyebrow">AI QA report · {{data.analysis.options.mode==='site_crawl'?'site crawl':'single page'}}</p><h1 style="font-size:42px">분석 보고서</h1><p class="report-url">{{data.analysis.normalizedUrl}}</p></div><div><button v-if="terminal.includes(data.analysis.status)" class="primary-button" :disabled="busy" @click="retry">다시 분석</button><button v-else class="primary-button" :disabled="busy" @click="cancel">취소 요청</button></div></header><div v-if="actionError" class="error-box">{{actionError}}</div><AnalysisProgress :analysis="data.analysis"/><AnalysisSummary v-if="data.analysis.summary" :summary="data.analysis.summary"/><SiteAnalysisReport v-if="data.analysis.options.mode==='site_crawl'&&data.pages.length" :detail="data"/><template v-else-if="data.snapshot&&data.pageAnalysis"><PageOverview :snapshot="data.snapshot" :page-analysis="data.pageAnalysis"/><DiscoveredFunctions :snapshot="data.snapshot" :page-analysis="data.pageAnalysis"/><GeneratedTestList :tests="data.generatedTests" :snapshot="data.snapshot"/><TestRunResult :runs="data.testRuns" :tests="data.generatedTests"/><IssueList :snapshot="data.snapshot" :page-analysis="data.pageAnalysis"/></template><div v-else-if="terminal.includes(data.analysis.status)&&data.analysis.error" class="error-box">{{data.analysis.error.message}}</div><div v-else class="empty">실행기가 결과를 저장하는 중입니다.</div></div><div v-else-if="error" class="error-box">분석 보고서를 불러오지 못했습니다.</div><div v-else class="empty">분석 보고서를 불러오는 중입니다.</div></template>
+
+<template>
+  <div v-if="data">
+    <header class="report-head">
+      <div>
+        <p class="eyebrow">AI QA report · {{ data.analysis.options.mode === 'site_crawl' ? 'site crawl' : 'single page' }}</p>
+        <h1 style="font-size:42px">분석 보고서</h1>
+        <p class="report-url">{{ data.analysis.normalizedUrl }}</p>
+      </div>
+      <div>
+        <button v-if="terminal.includes(data.analysis.status)" class="primary-button" :disabled="busy" @click="retry">다시 분석</button>
+        <button v-else class="primary-button" :disabled="busy" @click="cancel">취소 요청</button>
+      </div>
+    </header>
+    <div v-if="actionError" class="error-box">{{ actionError }}</div>
+    <div v-if="realtimeWarning" class="notice realtime-notice">
+      <span>{{ realtimeWarning }}</span>
+      <button type="button" :disabled="busy" @click="refreshDetail">상태 새로고침</button>
+    </div>
+    <AnalysisProgress :analysis="data.analysis" />
+    <AnalysisSummary v-if="data.analysis.summary" :summary="data.analysis.summary" />
+    <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" />
+    <template v-else-if="data.snapshot && data.pageAnalysis">
+      <PageOverview :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
+      <DiscoveredFunctions :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
+      <GeneratedTestList :tests="data.generatedTests" :snapshot="data.snapshot" />
+      <TestRunResult :runs="data.testRuns" :tests="data.generatedTests" />
+      <IssueList :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
+    </template>
+    <div v-else-if="terminal.includes(data.analysis.status) && data.analysis.error" class="error-box">{{ data.analysis.error.message }}</div>
+    <div v-else class="empty">실행기가 결과를 저장하는 중입니다.</div>
+  </div>
+  <div v-else-if="error" class="error-box">분석 보고서를 불러오지 못했습니다.</div>
+  <div v-else class="empty">분석 보고서를 불러오는 중입니다.</div>
+</template>
+
+<style scoped>
+.realtime-notice { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.realtime-notice button { flex:none; min-height:36px; padding:0 14px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+</style>
