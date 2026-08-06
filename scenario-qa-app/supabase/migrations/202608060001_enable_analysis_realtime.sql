@@ -11,3 +11,5 @@ begin
   end if;
 end;
 $$;
+
+alter table public.analyses replica identity full;

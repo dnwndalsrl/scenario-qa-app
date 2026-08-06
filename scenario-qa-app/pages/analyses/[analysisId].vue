@@ -17,6 +17,7 @@ const { data, refresh, error } = await useFetch<AnalysisDetail>(endpoint, { $fet
 let channel: RealtimeChannel | undefined;
 let staleTimer: ReturnType<typeof setTimeout> | undefined;
 let refreshPromise: Promise<void> | undefined;
+let subscribedAnalysisId = "";
 
 function isTerminal(status: string) {
   return terminal.includes(status);
@@ -78,18 +79,39 @@ function stopRealtime() {
   clearStaleTimer();
   if (channel) void useSupabaseBrowser().removeChannel(channel);
   channel = undefined;
+  subscribedAnalysisId = "";
 }
 
-onMounted(() => {
-  if (!data.value || isTerminal(data.value.analysis.status)) return;
+async function startRealtime() {
+  const targetId = analysisId.value;
+  if (!data.value || data.value.analysis.id !== targetId || isTerminal(data.value.analysis.status)) return;
+  if (channel && subscribedAnalysisId === targetId) return;
+
+  stopRealtime();
+  subscribedAnalysisId = targetId;
   scheduleStaleCheck(data.value.analysis.updatedAt);
   const supabase = useSupabaseBrowser();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (analysisId.value !== targetId) {
+    subscribedAnalysisId = "";
+    void startRealtime();
+    return;
+  }
+  if (sessionError || !sessionData.session) {
+    subscribedAnalysisId = "";
+    realtimeWarning.value = "실시간 상태 연결을 인증하지 못했습니다. 상태 새로고침을 이용해 주세요.";
+    return;
+  }
+  await supabase.realtime.setAuth(sessionData.session.access_token);
   channel = supabase
-    .channel(`analysis:${analysisId.value}`)
+    .channel(`analysis:${targetId}`)
     .on(
       "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "analyses", filter: `id=eq.${analysisId.value}` },
-      (payload) => applyRealtimeUpdate(payload.new as Record<string, unknown>)
+      { event: "UPDATE", schema: "public", table: "analyses" },
+      (payload) => {
+        const row = payload.new as Record<string, unknown>;
+        if (row.id === targetId) applyRealtimeUpdate(row);
+      }
     )
     .subscribe((status) => {
       if (status === "SUBSCRIBED") {
@@ -100,7 +122,18 @@ onMounted(() => {
         realtimeWarning.value = "실시간 상태 연결이 지연되고 있습니다. 필요하면 상태를 직접 새로고침해 주세요.";
       }
     });
-});
+}
+
+onMounted(() => void startRealtime());
+
+watch(
+  [analysisId, () => data.value?.analysis.id, () => data.value?.analysis.status],
+  () => {
+    if (!data.value || data.value.analysis.id !== analysisId.value) return;
+    if (isTerminal(data.value.analysis.status)) stopRealtime();
+    else void startRealtime();
+  }
+);
 
 onBeforeUnmount(stopRealtime);
 

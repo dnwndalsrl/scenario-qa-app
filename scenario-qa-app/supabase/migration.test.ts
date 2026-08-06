@@ -29,5 +29,6 @@ describe("Supabase migration security", () => {
   it("publishes analysis row changes to authenticated realtime subscribers", () => {
     expect(realtimeSql).toContain("alter publication supabase_realtime add table public.analyses");
     expect(realtimeSql).toContain("pg_publication_tables");
+    expect(realtimeSql).toContain("alter table public.analyses replica identity full");
   });
 });

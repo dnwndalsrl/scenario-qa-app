@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["server/**/*.test.ts"],
+    include: ["server/**/*.test.ts", "scripts/**/*.test.ts", "supabase/**/*.test.ts", "test/**/*.test.ts"],
     clearMocks: true,
     testTimeout: 45000,
     hookTimeout: 30000,
