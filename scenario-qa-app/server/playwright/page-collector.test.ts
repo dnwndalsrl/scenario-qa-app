@@ -44,6 +44,21 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(runs[1]?.screenshotArtifactIds.length).toBeGreaterThan(0);
     expect(runs[2]?.error?.code).toBe("TEST_SAFETY_BLOCKED");
   });
+
+  it("navigates to the captured page before a scenario without a goto step", async () => {
+    const target = snapshot.elements.find((element) => element.locatorCandidates.some((item) => item.unique))!;
+    const scenario = makeScenario("implicit-navigation", [{
+      action: "assert_visible",
+      description: "captured heading is visible",
+      elementId: target.id,
+      locator: target.locatorCandidates.find((item) => item.unique)!
+    }]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("success");
+    expect(run?.stepResults[0]?.currentUrl).toBe(snapshot.finalUrl);
+  });
 });
 
 function makeScenario(id: string, steps: Array<Partial<GeneratedTestScenario["steps"][number]> & Pick<GeneratedTestScenario["steps"][number], "action" | "description">>): GeneratedTestScenario {

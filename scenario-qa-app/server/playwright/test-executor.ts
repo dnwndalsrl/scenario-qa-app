@@ -53,6 +53,9 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
   const run: AutomatedTestRun = { id: createId("run"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, scenarioId: scenario.id, status: "running", stepResults: [], consoleIssues, networkIssues, screenshotArtifactIds, startedAt: new Date(started).toISOString() };
   let previousFailed = false;
   try {
+    if (scenario.steps[0]?.action !== "goto") {
+      await page.goto(snapshot.finalUrl, { waitUntil: "domcontentloaded", timeout: config.testStepTimeoutMs });
+    }
     for (const step of scenario.steps) {
       if (previousFailed) { run.stepResults.push(baseStep(step, "blocked", "선행 단계 실패로 실행하지 않음")); continue; }
       const stepStarted = Date.now();
