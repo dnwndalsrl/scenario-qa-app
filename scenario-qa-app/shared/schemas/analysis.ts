@@ -44,7 +44,7 @@ export const generatedTestResponseSchema = z.object({
     sourceElementIds: elementIds,
     steps: z.array(z.object({
       order: z.number().int().positive(), action: z.enum(["goto", "assert_url", "assert_title", "assert_visible", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]),
-      description: z.string().min(1).max(300), elementId: z.string().optional(), locator: locatorCandidateSchema.optional(), value: z.string().max(500).optional(), expected: z.string().max(500).optional(), timeoutMs: z.number().int().min(1000).max(30000).optional(), evidence: z.array(z.string().max(300)).max(10)
+      description: z.string().min(1).max(300), elementId: z.string().nullable(), locator: locatorCandidateSchema.nullable(), value: z.string().max(500).nullable(), expected: z.string().max(500).nullable(), timeoutMs: z.number().int().min(1000).max(30000).nullable(), evidence: z.array(z.string().max(300)).max(10)
     })).min(1).max(10)
   })).min(1).max(10)
 });

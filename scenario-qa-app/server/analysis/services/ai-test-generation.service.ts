@@ -31,7 +31,7 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       const element = step.elementId ? elements.get(step.elementId) : undefined;
       if (step.elementId && !element) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Unknown step element id");
       if (step.locator && (!element || !element.locatorCandidates.some((candidate) => candidate.strategy === step.locator!.strategy && candidate.value === step.locator!.value && candidate.unique))) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not unique");
-      return { ...step, id: createId("step"), order: index + 1, evidence: [...new Set([...(step.evidence || []), ...(step.elementId ? [`근거 요소: ${step.elementId}`] : [])])] };
+      return { ...step, elementId: step.elementId ?? undefined, locator: step.locator ?? undefined, value: step.value ?? undefined, expected: step.expected ?? undefined, timeoutMs: step.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(step.evidence || []), ...(step.elementId ? [`근거 요소: ${step.elementId}`] : [])])] };
     });
     return enforceSafety({ ...scenario, id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
   });
