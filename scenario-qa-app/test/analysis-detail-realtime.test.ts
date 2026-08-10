@@ -6,9 +6,10 @@ const source = readFileSync(new URL("../pages/analyses/[analysisId].vue", import
 describe("analysis detail live updates", () => {
   it("uses database change events instead of an API polling loop", () => {
     expect(source).toContain('"broadcast"');
-    expect(source).toContain('{ event: "UPDATE" }');
-    expect(source).toContain("config: { private: true }");
+    expect(source).toContain('{ event: "*" }');
+    expect(source).toContain("private: true, broadcast: { replication_ready: true }");
     expect(source).toContain("supabase.realtime.setAuth(sessionData.session.access_token)");
+    expect(source).toContain("message.payload ?? message");
     expect(source).toContain("if (row.id === targetId) applyRealtimeUpdate(row)");
     expect(source).toContain("watch(");
     expect(source).not.toContain("schedulePoll");

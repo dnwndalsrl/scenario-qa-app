@@ -104,12 +104,14 @@ async function startRealtime() {
   }
   await supabase.realtime.setAuth(sessionData.session.access_token);
   channel = supabase
-    .channel(`analysis:${targetId}`, { config: { private: true } })
+    .channel(`analysis:${targetId}`, {
+      config: { private: true, broadcast: { replication_ready: true } }
+    })
     .on(
       "broadcast",
-      { event: "UPDATE" },
+      { event: "*" },
       (message) => {
-        const row = message.payload as Record<string, unknown>;
+        const row = (message.payload ?? message) as Record<string, unknown>;
         if (row.id === targetId) applyRealtimeUpdate(row);
       }
     )
