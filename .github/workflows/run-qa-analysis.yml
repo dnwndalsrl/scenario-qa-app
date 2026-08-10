@@ -7,6 +7,22 @@ on:
         description: Supabase analysis UUID
         required: true
         type: string
+      mode:
+        description: Full analysis or one generated test
+        required: true
+        default: analysis
+        type: choice
+        options:
+          - analysis
+          - single_test
+      test_id:
+        description: Supabase generated_tests UUID for single_test mode
+        required: false
+        type: string
+      test_run_id:
+        description: Supabase test_runs UUID for single_test mode
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -51,10 +67,17 @@ jobs:
       - name: Validate input and secrets
         run: npm run qa:validate-input -- --analysis-id=${{ inputs.analysis_id }}
       - name: Run QA analysis
+        if: inputs.mode == 'analysis'
         run: npm run qa:run -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Run one QA test
+        if: inputs.mode == 'single_test'
+        run: npm run qa:run-test -- --analysis-id=${{ inputs.analysis_id }} --test-id=${{ inputs.test_id }} --test-run-id=${{ inputs.test_run_id }}
       - name: Mark interrupted analysis failed
-        if: failure()
+        if: failure() && inputs.mode == 'analysis'
         run: npm run qa:mark-failed -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Mark interrupted test failed
+        if: failure() && inputs.mode == 'single_test'
+        run: npm run qa:mark-test-failed -- --test-run-id=${{ inputs.test_run_id }}
       - name: Upload short-lived diagnostic artifact
         if: always()
         uses: actions/upload-artifact@v4

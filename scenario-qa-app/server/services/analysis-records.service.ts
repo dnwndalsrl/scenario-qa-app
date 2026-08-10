@@ -35,12 +35,22 @@ export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: 
     client.from("analysis_summaries").select("payload").eq("analysis_id", id).maybeSingle()
   ]);
   const payload = (summaryResult.data?.payload || {}) as Partial<AnalysisDetail>;
+  const generatedTests = (testsResult.data || []).map((item: any) => item.payload);
+  const testRuns = (runsResult.data || []).map((item: any) => item.payload);
+  const pages = (pagesResult.data || []).map((item: any) => {
+    const page = item.payload as AnalysisDetail["pages"][number];
+    return {
+      ...page,
+      generatedTests: generatedTests.filter((test) => test.pageId === page.page.id),
+      testRuns: testRuns.filter((run) => run.pageId === page.page.id)
+    };
+  });
   return {
     analysis: { ...rowToAnalysis(row), ...(payload.analysis || {}), id: row.id, status: rowToAnalysis(row).status, progress: row.progress, currentMessage: row.current_message, error: row.error || payload.analysis?.error, summary: row.summary || payload.analysis?.summary },
     snapshot: payload.snapshot, pageAnalysis: payload.pageAnalysis,
-    generatedTests: (testsResult.data || []).map((item: any) => item.payload),
-    testRuns: (runsResult.data || []).map((item: any) => item.payload),
-    pages: (pagesResult.data || []).map((item: any) => item.payload),
+    generatedTests,
+    testRuns,
+    pages,
     siteMap: payload.siteMap, siteAnalysis: payload.siteAnalysis, testDeduplication: payload.testDeduplication
   };
 }

@@ -2,6 +2,7 @@
 import type { AnalysisDetail, PageDetail, SiteAnalysisSummary } from "~/shared/types/analysis";
 import { uiLabel } from "~/utils/ui-label";
 const props = defineProps<{ detail: AnalysisDetail }>(); const selectedId = ref<string>();
+const emit = defineEmits<{ changed: [] }>();
 const selected = computed<PageDetail | undefined>(() => props.detail.pages.find((item) => item.page.id === selectedId.value) || props.detail.pages[0]);
 watch(() => props.detail.pages.length, () => { if (!selectedId.value && props.detail.pages[0]) selectedId.value = props.detail.pages[0].page.id; }, { immediate: true });
 const summary = computed(() => props.detail.analysis.summary as SiteAnalysisSummary | undefined);
@@ -22,7 +23,7 @@ function resultCount(page: PageDetail, status: string) { return page.testRuns.fi
       <img v-if="selected.snapshot?.screenshotArtifactId" class="screenshot" :src="`/api/analyses/${detail.analysis.id}/artifacts/${selected.snapshot.screenshotArtifactId}`" :alt="`${selected.snapshot.title} screenshot`">
       <div class="mini-grid"><div><span>발견 요소</span><strong>{{ selected.snapshot?.elements.length || 0 }}</strong></div><div><span>발견 기능</span><strong>{{ selected.pageAnalysis?.primaryFunctions.length || 0 }}</strong></div><div><span>테스트</span><strong>{{ selected.generatedTests.length }}</strong></div><div><span>실패</span><strong>{{ resultCount(selected, 'failed') + resultCount(selected, 'error') }}</strong></div></div>
       <div v-if="selected.pageAnalysis?.primaryFunctions.length" class="detail-block"><h3>발견 기능</h3><ul><li v-for="feature in selected.pageAnalysis.primaryFunctions" :key="feature.id"><strong>{{ feature.name }}</strong> — {{ feature.description }}</li></ul></div>
-      <div class="detail-block"><h3>자동 생성 테스트</h3><p v-if="!selected.generatedTests.length" class="muted">생성된 테스트가 없습니다.</p><ul v-else><li v-for="test in selected.generatedTests" :key="test.id">{{ test.title }} <span class="tag" :class="`tag--${test.safetyLevel}`">{{ uiLabel(test.safetyLevel) }}</span></li></ul></div>
+      <GeneratedTestList v-if="selected.snapshot" compact :analysis-id="detail.analysis.id" :tests="selected.generatedTests" :snapshot="selected.snapshot" :runs="selected.testRuns" @changed="emit('changed')" />
       <div v-if="selected.snapshot?.consoleMessages.length || selected.snapshot?.networkIssues.length" class="detail-block"><h3>콘솔·네트워크 문제</h3><ul><li v-for="issue in selected.snapshot.consoleMessages" :key="issue.id">{{ issue.type }}: {{ issue.text }}</li><li v-for="issue in selected.snapshot.networkIssues" :key="issue.id">{{ issue.status || 'request failed' }}: {{ issue.url }}</li></ul></div>
       <div v-if="selected.pageAnalysis?.limitations.length" class="detail-block"><h3>분석 한계</h3><ul><li v-for="item in selected.pageAnalysis.limitations" :key="item">{{ item }}</li></ul></div>
     </div></div>

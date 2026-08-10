@@ -7,7 +7,7 @@ export type SiteAnalysisStatus =
 export type PageType = "landing" | "login" | "signup" | "search" | "list" | "detail" | "dashboard" | "form" | "settings" | "article" | "unknown";
 export type TestSafetyLevel = "safe" | "review_required" | "blocked";
 export type TestRunStatus = "pending" | "running" | "success" | "failed" | "blocked" | "error";
-export type GeneratedTestAction = "goto" | "assert_url" | "assert_title" | "assert_visible" | "assert_enabled" | "assert_text" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
+export type GeneratedTestAction = "goto" | "assert_url" | "assert_title" | "assert_visible" | "assert_in_viewport" | "assert_enabled" | "assert_text" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
 export type LocatorStrategy = "test_id" | "role" | "label" | "placeholder" | "text" | "css";
 export type DiscoveredElementType = "link" | "button" | "input" | "textarea" | "select" | "checkbox" | "radio" | "form" | "heading" | "navigation" | "table" | "dialog" | "tab" | "alert" | "image" | "other";
 export type CrawlPageStatus = "queued" | "visiting" | "collected" | "analyzed" | "failed" | "skipped";
@@ -93,7 +93,7 @@ export interface GeneratedTestScenario {
   id: string; analysisId: string; pageId?: string; title: string; description: string; purpose: string;
   category: "page_load" | "navigation" | "visibility" | "accessibility" | "form_validation" | "search" | "interaction" | "error_detection";
   safetyLevel: TestSafetyLevel; safetyReasons: string[]; confidence: number; autoExecutable: boolean; sourceElementIds: string[];
-  steps: GeneratedTestStep[]; generatedAt: string;
+  steps: GeneratedTestStep[]; generatedAt: string; revision?: number; source?: "ai" | "user"; editedAt?: string;
 }
 export interface DuplicateTestGroup { fingerprint: string; keptTestId: string; removedTestIds: string[]; }
 export interface TestDeduplicationResult { originalCount: number; deduplicatedCount: number; removedCount: number; groups: DuplicateTestGroup[]; }
@@ -105,6 +105,7 @@ export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError;
+  trigger?: "initial" | "manual_rerun"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {

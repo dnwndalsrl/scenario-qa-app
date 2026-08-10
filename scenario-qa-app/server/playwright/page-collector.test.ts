@@ -59,6 +59,22 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.status).toBe("success");
     expect(run?.stepResults[0]?.currentUrl).toBe(snapshot.finalUrl);
   });
+
+  it("tracks a same-page link scroll and verifies that the target section enters the viewport", async () => {
+    const link = snapshot.elements.find((element) => element.testId === "features-link")!;
+    const targetId = snapshot.headings.find((heading) => heading.level === 2)?.elementId!;
+    const target = snapshot.elements.find((element) => element.id === targetId)!;
+    const scenario = makeScenario("section-scroll", [
+      { action: "click", description: "섹션 링크 클릭", elementId: link.id, locator: link.locatorCandidates.find((item) => item.unique)! },
+      { action: "assert_in_viewport", description: "목표 섹션 화면 내 도달 확인", elementId: target.id, locator: target.locatorCandidates.find((item) => item.unique)! }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("success");
+    expect(run?.stepResults[1]?.actual).toContain("스크롤 이벤트");
+    expect(run?.stepResults[1]?.currentUrl).toBe(snapshot.finalUrl);
+  });
 });
 
 function makeScenario(id: string, steps: Array<Partial<GeneratedTestScenario["steps"][number]> & Pick<GeneratedTestScenario["steps"][number], "action" | "description">>): GeneratedTestScenario {

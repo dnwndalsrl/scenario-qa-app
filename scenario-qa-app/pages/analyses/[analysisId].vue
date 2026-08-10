@@ -192,11 +192,11 @@ async function cancel() {
     </div>
     <AnalysisProgress :analysis="data.analysis" />
     <AnalysisSummary v-if="data.analysis.summary" :summary="data.analysis.summary" />
-    <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" />
+    <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" @changed="refreshDetail" />
     <template v-else-if="data.snapshot && data.pageAnalysis">
       <PageOverview :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
       <DiscoveredFunctions :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
-      <GeneratedTestList :tests="data.generatedTests" :snapshot="data.snapshot" />
+      <GeneratedTestList :analysis-id="data.analysis.id" :tests="data.generatedTests" :snapshot="data.snapshot" :runs="data.testRuns" @changed="refreshDetail" />
       <TestRunResult :runs="data.testRuns" :tests="data.generatedTests" />
       <IssueList :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
     </template>

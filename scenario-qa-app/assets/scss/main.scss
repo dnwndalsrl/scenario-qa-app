@@ -83,6 +83,18 @@ h3 { margin: 0; font-size: 17px; }
 .test-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .test-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .steps { margin: 14px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.scenario-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.scenario-spacer { flex: 1; }
+.scenario-button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); font-weight: 700; cursor: pointer; }
+.scenario-button--primary { border-color: var(--brand); background: var(--brand); color: white; }
+.scenario-button:disabled { opacity: .5; cursor: not-allowed; }
+.scenario-run { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 14px; color: var(--muted); font-size: 12px; }
+.scenario-editor { display: grid; gap: 12px; }
+.scenario-editor label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.scenario-editor input, .scenario-editor select, .scenario-editor textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); font: inherit; }
+.scenario-editor textarea { resize: vertical; }
+.scenario-step { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.scenario-step legend { padding: 0 5px; font-size: 12px; font-weight: 800; }
 .issue { padding: 14px; border-left: 4px solid var(--warn); border-radius: 8px; background: #fffaf0; overflow-wrap: anywhere; }
 .error-box { margin-top: 16px; padding: 14px; border-radius: 12px; background: #feeceb; color: var(--danger); }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
