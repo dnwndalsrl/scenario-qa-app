@@ -8,7 +8,7 @@ node_modules/
 storage/
 !server/storage/
 !server/storage/*.ts
-artifacts/
+/artifacts/
 coverage/
 playwright-report/
 test-results/
