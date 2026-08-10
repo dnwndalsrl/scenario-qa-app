@@ -9,6 +9,6 @@ export default defineEventHandler(async (event) => {
       supabase: { configured: Boolean(config.public.supabaseUrl && config.public.supabaseAnonKey), reachable: !error },
       githubActions: { configured: Boolean(config.githubOwner && config.githubRepo && config.githubToken), role: "Chromium, crawl, AI and test execution" }
     },
-    limits: { maxPages: 5, defaultPages: 3, maxDepth: 2, defaultDepth: 1, dailyPerUser: 5, concurrentPerUser: 1, workflowTimeoutMinutes: 10 }
+    limits: { maxPages: 5, defaultPages: 3, maxDepth: 2, defaultDepth: 1, dailyPerUser: 20, concurrentPerUser: 1, workflowTimeoutMinutes: 10 }
   };
 });
