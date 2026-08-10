@@ -11,6 +11,8 @@ describe("analysis detail live updates", () => {
     expect(source).toContain("supabase.realtime.setAuth(sessionData.session.access_token)");
     expect(source).toContain("message.payload ?? message");
     expect(source).toContain("if (row.id === targetId) applyRealtimeUpdate(row)");
+    expect(source).toContain("data.value = { ...data.value, analysis: updated }");
+    expect(source).not.toContain("data.value.analysis.status = status");
     expect(source).toContain("watch(");
     expect(source).not.toContain("schedulePoll");
     expect(source).not.toContain("pollIntervalMs");

@@ -59,14 +59,20 @@ async function refreshDetail() {
 function applyRealtimeUpdate(row: Record<string, unknown>) {
   if (!data.value) return;
   const status = toClientStatus(row.status);
-  data.value.analysis.status = status;
-  if (typeof row.progress === "number") data.value.analysis.progress = row.progress;
-  data.value.analysis.currentMessage = typeof row.current_message === "string" ? row.current_message : undefined;
-  data.value.analysis.updatedAt = typeof row.updated_at === "string" ? row.updated_at : data.value.analysis.updatedAt;
-  data.value.analysis.startedAt = typeof row.started_at === "string" ? row.started_at : data.value.analysis.startedAt;
-  data.value.analysis.completedAt = typeof row.completed_at === "string" ? row.completed_at : undefined;
-  data.value.analysis.error = row.error && typeof row.error === "object" ? row.error as AnalysisDetail["analysis"]["error"] : undefined;
-  scheduleStaleCheck(data.value.analysis.updatedAt);
+  const current = data.value.analysis;
+  const updated = {
+    ...current,
+    status,
+    progress: typeof row.progress === "number" ? row.progress : current.progress,
+    currentMessage: typeof row.current_message === "string" ? row.current_message : undefined,
+    updatedAt: typeof row.updated_at === "string" ? row.updated_at : current.updatedAt,
+    startedAt: typeof row.started_at === "string" ? row.started_at : current.startedAt,
+    completedAt: typeof row.completed_at === "string" ? row.completed_at : undefined,
+    error: row.error && typeof row.error === "object" ? row.error as AnalysisDetail["analysis"]["error"] : undefined
+  };
+  // Nuxt 4의 useFetch 데이터는 얕은 ref일 수 있으므로 객체를 교체해야 화면이 다시 렌더링된다.
+  data.value = { ...data.value, analysis: updated };
+  scheduleStaleCheck(updated.updatedAt);
 
   // 진행 중에는 Realtime 행 데이터만 반영하고, 보고서가 완성된 시점에 상세 데이터를 한 번만 조회한다.
   if (isTerminal(status)) {
