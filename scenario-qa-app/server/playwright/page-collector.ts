@@ -131,24 +131,28 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
     const all = [...document.querySelectorAll<HTMLElement>(selector)];
     const forms = [...document.querySelectorAll<HTMLFormElement>("form")];
     let totalText = 0;
-    const visible = (node: HTMLElement) => {
-      const style = getComputedStyle(node); const rect = node.getBoundingClientRect();
-      return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+    // Object methods avoid tsx/esbuild's injected `__name` helper. That
+    // helper is unavailable inside Playwright's isolated page context.
+    const helpers = {
+      visible(node: HTMLElement) {
+        const style = getComputedStyle(node); const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+      },
+      clean(value: string | null | undefined, max = 300) {
+        const normalized = (value || "").replace(/\s+/g, " ").trim();
+        const remaining = Math.max(0, maxTotalText - totalText); const result = normalized.slice(0, Math.min(max, remaining)); totalText += result.length; return result || undefined;
+      }
     };
-    const clean = (value: string | null | undefined, max = 300) => {
-      const normalized = (value || "").replace(/\s+/g, " ").trim();
-      const remaining = Math.max(0, maxTotalText - totalText); const result = normalized.slice(0, Math.min(max, remaining)); totalText += result.length; return result || undefined;
-    };
-    return all.filter(visible).slice(0, maxElements).map((node) => {
+    return all.filter((node) => helpers.visible(node)).slice(0, maxElements).map((node) => {
       const input = node as HTMLInputElement; const anchor = node as HTMLAnchorElement; const form = node as HTMLFormElement; const image = node as HTMLImageElement;
       const label = node.id ? document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(node.id)}"]`)?.innerText : node.closest("label")?.textContent;
       const role = node.getAttribute("role") || ({ A: "link", BUTTON: "button", NAV: "navigation", MAIN: "main", HEADER: "banner", FOOTER: "contentinfo", ASIDE: "complementary", TABLE: "table" } as Record<string,string>)[node.tagName];
-      const text = node.tagName === "INPUT" && input.type === "password" ? undefined : clean(node.innerText || (node.tagName === "IMG" ? image.alt : ""));
-      const accessibleName = clean(node.getAttribute("aria-label") || label || text || node.getAttribute("title") || image.alt, 300);
+      const text = node.tagName === "INPUT" && input.type === "password" ? undefined : helpers.clean(node.innerText || (node.tagName === "IMG" ? image.alt : ""));
+      const accessibleName = helpers.clean(node.getAttribute("aria-label") || label || text || node.getAttribute("title") || image.alt, 300);
       const ownerForm = node.tagName === "FORM" ? node as HTMLFormElement : node.closest("form");
       return {
-        tagName: node.tagName.toLowerCase(), role: role || undefined, accessibleName, label: clean(label), text,
-        placeholder: clean(input.placeholder), testId: node.dataset.testid, href: anchor.href || undefined,
+        tagName: node.tagName.toLowerCase(), role: role || undefined, accessibleName, label: helpers.clean(label), text,
+        placeholder: helpers.clean(input.placeholder), testId: node.dataset.testid, href: anchor.href || undefined,
         inputType: node.tagName === "INPUT" ? input.type : undefined, enabled: !(input.disabled || node.getAttribute("aria-disabled") === "true"),
         required: Boolean(input.required || node.getAttribute("aria-required") === "true"), readonly: Boolean(input.readOnly), id: node.id || undefined,
         classes: [...node.classList].slice(0, 5), headingLevel: /^H[1-6]$/.test(node.tagName) ? Number(node.tagName.slice(1)) : undefined,
