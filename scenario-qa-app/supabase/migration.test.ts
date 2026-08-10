@@ -5,6 +5,7 @@ const grantsSql = readFileSync(new URL("./migrations/202608040002_authenticated_
 const staleSql = readFileSync(new URL("./migrations/202608040003_expire_stale_analysis.sql", import.meta.url), "utf8");
 const unstartedSql = readFileSync(new URL("./migrations/202608100001_expire_unstarted_analysis.sql", import.meta.url), "utf8");
 const serviceRoleSql = readFileSync(new URL("./migrations/202608100002_service_role_runner_grants.sql", import.meta.url), "utf8");
+const dailyLimitSql = readFileSync(new URL("./migrations/202608100003_raise_daily_analysis_limit.sql", import.meta.url), "utf8");
 const realtimeSql = readFileSync(new URL("./migrations/202608060001_enable_analysis_realtime.sql", import.meta.url), "utf8");
 const broadcastSql = readFileSync(new URL("./migrations/202608060002_analysis_private_broadcast.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
@@ -16,6 +17,7 @@ describe("Supabase migration security", () => {
   });
   it("contains the production limits", () => {
     expect(sql).toContain(">= 5"); expect(sql).toContain(">= 1"); expect(sql).toContain("p_max_pages not between 1 and 5"); expect(sql).toContain("p_max_depth not between 0 and 2");
+    expect(dailyLimitSql).toContain(">= 20"); expect(dailyLimitSql).toContain("'dailyLimit', 20");
   });
   it("grants authenticated users only the operations protected by RLS", () => {
     expect(grantsSql).toContain("grant select on table");
