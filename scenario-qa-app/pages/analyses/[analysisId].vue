@@ -118,10 +118,12 @@ async function startRealtime() {
       { event: "*" },
       (message) => {
         const row = (message.payload ?? message) as Record<string, unknown>;
+        console.info("[analysis-realtime] broadcast", { id: row.id, progress: row.progress });
         if (row.id === targetId) applyRealtimeUpdate(row);
       }
     )
     .subscribe((status) => {
+      console.info("[analysis-realtime] status", status);
       if (status === "SUBSCRIBED") {
         realtimeWarning.value = "";
         // SSR 조회와 구독 시작 사이에 발생한 변경을 한 번만 동기화한다.
