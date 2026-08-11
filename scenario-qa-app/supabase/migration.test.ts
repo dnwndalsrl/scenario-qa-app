@@ -10,6 +10,7 @@ const realtimeSql = readFileSync(new URL("./migrations/202608060001_enable_analy
 const broadcastSql = readFileSync(new URL("./migrations/202608060002_analysis_private_broadcast.sql", import.meta.url), "utf8");
 const threeStageSql = readFileSync(new URL("./migrations/202608110001_three_stage_analysis.sql", import.meta.url), "utf8");
 const requirementUploadSql = readFileSync(new URL("./migrations/202608110002_authenticated_requirement_upload.sql", import.meta.url), "utf8");
+const dispatchStateFixSql = readFileSync(new URL("./migrations/202608110003_fix_dispatch_state_enum_cast.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -77,5 +78,11 @@ describe("Supabase migration security", () => {
     expect(requirementUploadSql).toContain("fail_analysis_document_upload");
     expect(requirementUploadSql).toContain("set_analysis_dispatch_state");
     expect(requirementUploadSql).toContain("p_status not in ('dispatching', 'dispatched', 'dispatch_failed')");
+  });
+
+  it("casts the dispatch status text to the analyses enum before updating", () => {
+    expect(dispatchStateFixSql).toContain("status = p_status::public.analysis_status");
+    expect(dispatchStateFixSql).toContain("user_id = auth.uid()");
+    expect(dispatchStateFixSql).toContain("grant execute on function public.set_analysis_dispatch_state(uuid,text,text,text,jsonb) to authenticated");
   });
 });
