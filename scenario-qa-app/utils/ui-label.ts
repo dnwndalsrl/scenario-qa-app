@@ -14,6 +14,8 @@ const UI_LABELS: Record<string, string> = {
   running_tests: "테스트 실행 중",
   building_report: "보고서 생성 중",
   completed: "완료",
+  processing: "분석 중",
+  ignored: "문서 없이 진행",
   partially_completed: "부분 완료",
   failed: "실패",
   safe: "안전",

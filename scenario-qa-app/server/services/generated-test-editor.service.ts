@@ -18,8 +18,10 @@ export const updateGeneratedTestSchema = z.object({
     timeoutMs: z.number().int().min(1000).max(30000).nullable().optional()
   })).min(1).max(10)
 });
+export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({ pageId: z.string().trim().min(1).max(100).nullable().optional() });
 
 export type UpdateGeneratedTestInput = z.infer<typeof updateGeneratedTestSchema>;
+export type CreateGeneratedTestInput = z.infer<typeof createGeneratedTestSchema>;
 
 const noElementActions = new Set<GeneratedTestAction>(["goto", "assert_url", "assert_title"]);
 
@@ -42,6 +44,15 @@ export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: P
   return enforceSafety({
     ...existing, title: input.title, description: input.description, purpose: input.purpose, steps, sourceElementIds,
     safetyLevel: "safe", autoExecutable: true,
-    revision: (existing.revision || 1) + 1, source: "user", editedAt: new Date().toISOString()
+    revision: existing.revision === 0 ? 1 : (existing.revision || 1) + 1, source: "user", editedAt: new Date().toISOString()
   });
+}
+
+export function buildAddedScenario(analysisId: string, snapshot: PageSnapshot, input: CreateGeneratedTestInput): GeneratedTestScenario {
+  const now = new Date().toISOString();
+  return buildEditedScenario({
+    id: createId("test"), analysisId, pageId: snapshot.pageId, title: input.title, description: input.description, purpose: input.purpose,
+    category: "interaction", safetyLevel: "safe", safetyReasons: [], confidence: 1, autoExecutable: true,
+    sourceElementIds: [], steps: [], generatedAt: now, revision: 0, source: "user", requirementIds: []
+  }, snapshot, input);
 }

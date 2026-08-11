@@ -13,7 +13,7 @@ export function rowToAnalysis(row: Record<string, any>): SiteAnalysis {
     : row.status === "running" || row.status === "cancel_requested" ? "launching_browser"
     : row.status === "cancelled" || row.status === "dispatch_failed" ? "failed" : row.status;
   return {
-    id: row.id, targetUrl: row.target_url, normalizedUrl: row.normalized_url, status,
+    id: row.id, targetUrl: row.target_url, normalizedUrl: row.normalized_url, status, processStage: row.process_stage || "page_analysis", scenariosApprovedAt: row.scenarios_approved_at || undefined,
     progress: row.progress, currentMessage: row.current_message, options, pageIds: [], pageAnalysisIds: [], generatedTestIds: [], testRunIds: [],
     summary: row.summary || undefined, error: row.error || undefined, createdAt: row.created_at,
     startedAt: row.started_at || undefined, completedAt: row.completed_at || undefined, updatedAt: row.updated_at
@@ -28,11 +28,12 @@ export async function getOwnedAnalysis(client: SupabaseClient, id: string) {
 
 export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: string): Promise<AnalysisDetail> {
   const row = await getOwnedAnalysis(client, id);
-  const [pagesResult, testsResult, runsResult, summaryResult] = await Promise.all([
+  const [pagesResult, testsResult, runsResult, summaryResult, documentResult] = await Promise.all([
     client.from("analysis_pages").select("payload").eq("analysis_id", id).order("created_at"),
     client.from("generated_tests").select("payload").eq("analysis_id", id).order("created_at"),
     client.from("test_runs").select("payload").eq("analysis_id", id).order("created_at"),
-    client.from("analysis_summaries").select("payload").eq("analysis_id", id).maybeSingle()
+    client.from("analysis_summaries").select("payload").eq("analysis_id", id).maybeSingle(),
+    client.from("requirement_documents").select("payload,status,file_name,error").eq("analysis_id", id).maybeSingle()
   ]);
   const payload = (summaryResult.data?.payload || {}) as Partial<AnalysisDetail>;
   const generatedTests = (testsResult.data || []).map((item: any) => item.payload);
@@ -51,6 +52,10 @@ export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: 
     generatedTests,
     testRuns,
     pages,
+    documentAnalysis: documentResult.data ? {
+      fileName: documentResult.data.file_name, requirements: [], limitations: [],
+      ...(documentResult.data.payload || {}), status: documentResult.data.status, error: documentResult.data.error || undefined
+    } : undefined,
     siteMap: payload.siteMap, siteAnalysis: payload.siteAnalysis, testDeduplication: payload.testDeduplication
   };
 }

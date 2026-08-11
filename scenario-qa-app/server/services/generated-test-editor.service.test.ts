@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeneratedTestScenario, PageSnapshot } from "../../shared/types/analysis";
-import { buildEditedScenario } from "./generated-test-editor.service";
+import { buildAddedScenario, buildEditedScenario } from "./generated-test-editor.service";
 
 const snapshot = {
   id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com", finalUrl: "https://example.com", title: "Example",
@@ -21,5 +21,17 @@ describe("generated test editor", () => {
 
   it("rejects element actions without a discovered unique target", () => {
     expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 테스트", description: "", purpose: "", steps: [{ action: "click", description: "클릭", elementId: "element-404" }] })).toThrow("대상 요소");
+  });
+
+  it("creates a user-owned scenario that is ready for approval", () => {
+    const added = buildAddedScenario("analysis-1", snapshot, {
+      title: "ABOUT US 섹션 이동",
+      description: "같은 페이지에서 섹션으로 스크롤합니다.",
+      purpose: "요구사항 확인",
+      pageId: null,
+      steps: [{ action: "assert_in_viewport", description: "ABOUT US 섹션 표시", elementId: "element-1" }]
+    });
+    expect(added).toMatchObject({ analysisId: "analysis-1", source: "user", revision: 1, safetyLevel: "safe", autoExecutable: true, requirementIds: [] });
+    expect(added.steps[0]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { unique: true } });
   });
 });

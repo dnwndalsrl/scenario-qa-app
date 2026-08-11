@@ -18,7 +18,8 @@ const props = withDefaults(defineProps<{
   snapshot: PageSnapshot;
   runs?: AutomatedTestRun[];
   compact?: boolean;
-}>(), { runs: () => [], compact: false });
+  reviewMode?: boolean;
+}>(), { runs: () => [], compact: false, reviewMode: false });
 const emit = defineEmits<{ changed: [] }>();
 const { $api } = useNuxtApp();
 const editingId = ref("");
@@ -55,6 +56,9 @@ function needsElement(action: GeneratedTestAction) { return !noElementActions.ha
 function latestRun(testId: string) { return [...props.runs].reverse().find((run) => run.scenarioId === testId); }
 function runIsActive(testId: string) { return ["pending", "running"].includes(latestRun(testId)?.status || ""); }
 function actionLabel(action: GeneratedTestAction) { return actions.find((item) => item.value === action)?.label || action; }
+function defaultElementId() {
+  return props.snapshot.elements.find((element) => element.locatorCandidates.some((candidate) => candidate.unique))?.id;
+}
 function startEdit(test: GeneratedTestScenario) {
   drafts.value[test.id] = {
     title: test.title, description: test.description, purpose: test.purpose,
@@ -66,9 +70,14 @@ function startEdit(test: GeneratedTestScenario) {
   editingId.value = test.id;
   feedback.value = "";
 }
+function startAdd() {
+  drafts.value.__new = { title: "", description: "", purpose: "", steps: [{ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() }] };
+  editingId.value = "__new";
+  feedback.value = "";
+}
 function cancelEdit() { editingId.value = ""; }
 function addStep(testId: string) {
-  drafts.value[testId]?.steps.push({ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: props.snapshot.elements[0]?.id });
+  drafts.value[testId]?.steps.push({ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() });
 }
 function removeStep(testId: string, index: number) {
   if ((drafts.value[testId]?.steps.length || 0) > 1) drafts.value[testId]?.steps.splice(index, 1);
@@ -85,7 +94,8 @@ async function save(testId: string) {
   busyId.value = testId;
   feedback.value = "";
   try {
-    await $api(`/api/analyses/${props.analysisId}/tests/${testId}`, { method: "PUT", body: draft });
+    const target = testId === "__new" ? `/api/analyses/${props.analysisId}/tests` : `/api/analyses/${props.analysisId}/tests/${testId}`;
+    await $api(target, { method: testId === "__new" ? "POST" : "PUT", body: testId === "__new" ? { ...draft, pageId: props.snapshot.pageId || null } : draft });
     editingId.value = "";
     feedbackError.value = false;
     feedback.value = "테스트 시나리오를 저장했습니다.";
@@ -135,20 +145,22 @@ onBeforeUnmount(stopRefresh);
   <component :is="compact ? 'div' : 'section'" :class="compact ? 'detail-block' : 'section'">
     <div class="section-head">
       <div><h2 v-if="!compact">AI가 제안한 테스트</h2><h3 v-else>자동 생성 테스트</h3><p>시나리오를 수정하거나 안전한 테스트 한 건만 다시 실행할 수 있습니다.</p></div>
-      <span class="tag">{{ tests.length }}개</span>
+      <div class="scenario-actions"><span class="tag">{{ tests.length }}개</span><button v-if="reviewMode && editingId !== '__new'" type="button" class="scenario-button" @click="startAdd">새 시나리오 추가</button></div>
     </div>
     <div v-if="feedback" :class="feedbackError ? 'error-box' : 'notice'">{{ feedback }}</div>
-    <p v-if="!tests.length" class="muted">생성된 테스트가 없습니다.</p>
-    <div v-else class="grid">
+    <p v-if="!tests.length && editingId !== '__new'" class="muted">생성된 테스트가 없습니다.</p>
+    <div v-if="tests.length || editingId === '__new'" class="grid">
+      <article v-if="editingId === '__new'" class="test-card"><form class="scenario-editor" @submit.prevent="save('__new')"><h3>사용자 시나리오 추가</h3><label>제목<input v-model="drafts.__new!.title" required maxlength="160"></label><label>설명<textarea v-model="drafts.__new!.description" maxlength="500" rows="2" /></label><label>목적<textarea v-model="drafts.__new!.purpose" maxlength="500" rows="2" /></label><fieldset v-for="(step,index) in drafts.__new!.steps" :key="index" class="scenario-step"><legend>{{ index+1 }}단계</legend><label>동작<select v-model="step.action" @change="onActionChanged(step)"><option v-for="action in actions" :key="action.value" :value="action.value">{{ action.label }}</option></select></label><label v-if="needsElement(step.action)">대상 요소<select v-model="step.elementId" required><option value="" disabled>요소를 선택하세요</option><option v-for="element in snapshot.elements" :key="element.id" :value="element.id">{{ elementLabel(element.id) }}</option></select></label><label>설명<input v-model="step.description" required maxlength="300"></label><label v-if="['fill','select','press'].includes(step.action)">입력값<input v-model="step.value" maxlength="500"></label><label v-if="['assert_url','assert_title','assert_text'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500"></label><button type="button" class="scenario-button" :disabled="drafts.__new!.steps.length === 1" @click="removeStep('__new',index)">단계 삭제</button></fieldset><div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep('__new')">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" @click="cancelEdit">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === '__new'">{{ busyId === '__new' ? '저장 중…' : '추가' }}</button></div></form></article>
       <article v-for="test in tests" :key="test.id" class="test-card">
         <template v-if="editingId !== test.id">
           <div class="test-card__head"><div><h3>{{ test.title }}</h3><p class="muted">{{ test.purpose }}</p></div><span class="tag" :class="`tag--${test.safetyLevel}`">{{ uiLabel(test.safetyLevel) }}</span></div>
           <div class="test-meta"><span class="tag">{{ uiLabel(test.category) }}</span><span class="tag">신뢰도 {{ Math.round(test.confidence * 100) }}%</span><span class="tag">수정 {{ test.revision || 1 }}판</span><span class="tag">{{ test.autoExecutable ? '자동 실행 가능' : '실행 검토 필요' }}</span></div>
           <p v-if="test.safetyReasons.length" class="muted">안전성 근거: {{ test.safetyReasons.join(' ') }}</p>
           <div class="test-meta"><span v-for="id in test.sourceElementIds" :key="id" class="tag">{{ elementLabel(id) }}</span></div>
+          <div v-if="test.requirementIds?.length" class="test-meta"><span v-for="id in test.requirementIds" :key="id" class="tag tag--review">요구사항 {{ id }}</span></div>
           <ol class="steps"><li v-for="step in test.steps" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong> · {{ step.description }}</li></ol>
           <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${latestRun(test.id)!.status}`">{{ uiLabel(latestRun(test.id)!.status) }}</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
-          <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">시나리오 수정</button><button type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
+          <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">시나리오 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
         </template>
         <form v-else class="scenario-editor" @submit.prevent="save(test.id)">
           <label>제목<input v-model="drafts[test.id]!.title" required maxlength="160"></label>

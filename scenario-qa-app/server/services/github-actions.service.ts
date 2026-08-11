@@ -28,6 +28,11 @@ export async function dispatchTestWorkflow(analysisId: string, testId: string, t
   await dispatchWorkflow({ analysis_id: analysisId, mode: "single_test", test_id: testId, test_run_id: testRunId }, config, fetcher);
 }
 
+export async function dispatchApprovedTestsWorkflow(analysisId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {
+  if (!uuidPattern.test(analysisId)) throw new Error("Invalid analysis id");
+  await dispatchWorkflow({ analysis_id: analysisId, mode: "approved_tests", test_id: "", test_run_id: "" }, config, fetcher);
+}
+
 export function githubConfigFromRuntime(config: ReturnType<typeof useRuntimeConfig>): GitHubDispatchConfig {
   return {
     token: String(config.githubToken || ""), owner: String(config.githubOwner || ""), repo: String(config.githubRepo || ""),
