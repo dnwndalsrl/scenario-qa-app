@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const parsed = updateGeneratedTestSchema.safeParse(await readBody(event));
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "테스트 시나리오 입력값을 확인해 주세요." });
 
-  const admin = createServiceSupabaseClient();
+  const admin = createServiceSupabaseClient(event);
   const testRow = await getGeneratedTestRow(admin, analysisId, testId);
 
   let snapshotQuery = admin.from("page_snapshots").select("payload").eq("analysis_id", analysisId).order("created_at", { ascending: false }).limit(1);
