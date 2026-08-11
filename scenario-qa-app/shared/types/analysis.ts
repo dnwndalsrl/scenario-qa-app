@@ -1,4 +1,5 @@
 export type AnalysisMode = "single_page" | "site_crawl";
+export type AnalysisProcessStage = "document_analysis" | "page_analysis" | "scenario_review" | "test_execution" | "report_complete" | "document_failed" | "failed";
 export type SiteAnalysisStatus =
   | "pending" | "launching_browser" | "loading_entry_page" | "loading_page" | "collecting_entry_page" | "collecting_page"
   | "discovering_links" | "crawling_pages" | "analyzing_page" | "analyzing_pages" | "generating_tests"
@@ -7,7 +8,7 @@ export type SiteAnalysisStatus =
 export type PageType = "landing" | "login" | "signup" | "search" | "list" | "detail" | "dashboard" | "form" | "settings" | "article" | "unknown";
 export type TestSafetyLevel = "safe" | "review_required" | "blocked";
 export type TestRunStatus = "pending" | "running" | "success" | "failed" | "blocked" | "error";
-export type GeneratedTestAction = "goto" | "assert_url" | "assert_title" | "assert_visible" | "assert_enabled" | "assert_text" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
+export type GeneratedTestAction = "goto" | "assert_url" | "assert_title" | "assert_visible" | "assert_in_viewport" | "assert_enabled" | "assert_text" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
 export type LocatorStrategy = "test_id" | "role" | "label" | "placeholder" | "text" | "css";
 export type DiscoveredElementType = "link" | "button" | "input" | "textarea" | "select" | "checkbox" | "radio" | "form" | "heading" | "navigation" | "table" | "dialog" | "tab" | "alert" | "image" | "other";
 export type CrawlPageStatus = "queued" | "visiting" | "collected" | "analyzed" | "failed" | "skipped";
@@ -39,7 +40,12 @@ export interface SiteAnalysis {
   id: string; targetUrl: string; normalizedUrl: string; status: SiteAnalysisStatus; progress: number; currentMessage?: string;
   options: SiteAnalysisOptions; pageSnapshotId?: string; pageAnalysisId?: string; pageIds: string[]; pageAnalysisIds: string[];
   siteMapId?: string; siteAnalysisId?: string; generatedTestIds: string[]; testRunIds: string[]; crawlState?: CrawlState;
-  summary?: AnalysisSummary | SiteAnalysisSummary; error?: AnalysisError; createdAt: string; startedAt?: string; completedAt?: string; updatedAt: string;
+  summary?: AnalysisSummary | SiteAnalysisSummary; error?: AnalysisError; processStage?: AnalysisProcessStage; scenariosApprovedAt?: string; createdAt: string; startedAt?: string; completedAt?: string; updatedAt: string;
+}
+export interface RequirementItem { id: string; title: string; description: string; expectedBehavior: string; priority: "low" | "medium" | "high"; sourceReference: string; }
+export interface RequirementDocumentAnalysis {
+  fileName: string; status: "pending" | "processing" | "completed" | "failed" | "ignored"; summary?: string;
+  requirements: RequirementItem[]; limitations: string[]; pageCount?: number; extractedCharacters?: number; analyzedAt?: string; error?: AnalysisError;
 }
 export interface LinkPriorityScore { total: number; reasons: string[]; }
 export interface CrawlQueueItem {
@@ -93,7 +99,7 @@ export interface GeneratedTestScenario {
   id: string; analysisId: string; pageId?: string; title: string; description: string; purpose: string;
   category: "page_load" | "navigation" | "visibility" | "accessibility" | "form_validation" | "search" | "interaction" | "error_detection";
   safetyLevel: TestSafetyLevel; safetyReasons: string[]; confidence: number; autoExecutable: boolean; sourceElementIds: string[];
-  steps: GeneratedTestStep[]; generatedAt: string;
+  steps: GeneratedTestStep[]; generatedAt: string; revision?: number; source?: "ai" | "user"; editedAt?: string; requirementIds?: string[];
 }
 export interface DuplicateTestGroup { fingerprint: string; keptTestId: string; removedTestIds: string[]; }
 export interface TestDeduplicationResult { originalCount: number; deduplicatedCount: number; removedCount: number; groups: DuplicateTestGroup[]; }
@@ -105,11 +111,12 @@ export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError;
+  trigger?: "initial" | "manual_rerun" | "approved_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {
   analysis: SiteAnalysis; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[];
-  pages: PageDetail[]; siteMap?: SiteMap; siteAnalysis?: AiSiteAnalysis; testDeduplication?: TestDeduplicationResult;
+  pages: PageDetail[]; siteMap?: SiteMap; siteAnalysis?: AiSiteAnalysis; testDeduplication?: TestDeduplicationResult; documentAnalysis?: RequirementDocumentAnalysis;
 }
 
 export const ANALYSIS_STAGES: Array<{ status: SiteAnalysisStatus; progress: number; message: string }> = [

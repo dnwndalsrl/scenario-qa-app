@@ -8,6 +8,7 @@ const serviceRoleSql = readFileSync(new URL("./migrations/202608100002_service_r
 const dailyLimitSql = readFileSync(new URL("./migrations/202608100003_raise_daily_analysis_limit.sql", import.meta.url), "utf8");
 const realtimeSql = readFileSync(new URL("./migrations/202608060001_enable_analysis_realtime.sql", import.meta.url), "utf8");
 const broadcastSql = readFileSync(new URL("./migrations/202608060002_analysis_private_broadcast.sql", import.meta.url), "utf8");
+const threeStageSql = readFileSync(new URL("./migrations/202608110001_three_stage_analysis.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -58,5 +59,13 @@ describe("Supabase migration security", () => {
     expect(broadcastSql).toContain("perform realtime.send(");
     expect(broadcastSql).toContain("after update on public.analyses");
     expect(broadcastSql).toContain("alter publication supabase_realtime drop table public.analyses");
+  });
+  it("adds the private PDF requirements stage and broadcasts stage changes", () => {
+    expect(threeStageSql).toContain("process_stage text not null");
+    expect(threeStageSql).toContain("create table if not exists public.requirement_documents");
+    expect(threeStageSql).toContain("alter table public.requirement_documents enable row level security");
+    expect(threeStageSql).toContain("values('qa-requirements','qa-requirements',false,10485760");
+    expect(threeStageSql).toContain("'process_stage', new.process_stage");
+    expect(threeStageSql).toContain("'scenarios_approved_at', new.scenarios_approved_at");
   });
 });

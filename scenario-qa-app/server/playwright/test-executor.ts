@@ -61,7 +61,7 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
       const stepStarted = Date.now();
       try {
         await executeStep(page, snapshot, step, config.testStepTimeoutMs);
-        run.stepResults.push({ ...baseStep(step, "success"), expected: step.expected, actual: await actualValue(page, step), currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        run.stepResults.push({ ...baseStep(step, "success"), expected: step.expected, actual: await actualValue(page, snapshot, step), currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
       } catch (error) {
         previousFailed = true;
         const screenshot = await page.screenshot({ type: "png", fullPage: false }).then((bytes) => savePngArtifact(snapshot.analysisId, bytes)).catch(() => undefined);
@@ -88,9 +88,10 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
   if (count === 0) throw new AppError("TEST_LOCATOR_NOT_FOUND"); if (count !== 1) throw new AppError("TEST_LOCATOR_NOT_UNIQUE");
   switch (step.action) {
     case "assert_visible": await locator.waitFor({ state: "visible", timeout }); break;
+    case "assert_in_viewport": await waitForInViewport(page, locator, timeout); break;
     case "assert_enabled": if (!await locator.isEnabled({ timeout })) throw new Error("요소가 비활성 상태입니다."); break;
     case "assert_text": { const text = await locator.innerText({ timeout }); if (!text.includes(step.expected || "")) throw new Error(`예상 텍스트를 찾지 못했습니다: ${text}`); break; }
-    case "click": await locator.click({ timeout }); break;
+    case "click": await resetScrollTracking(page); await locator.click({ timeout }); break;
     case "fill": await locator.fill(step.value || "qa-read-only-check", { timeout }); break;
     case "select": await locator.selectOption(step.value || { index: 0 }, { timeout }); break;
     case "press": await locator.press(step.value || "Tab", { timeout }); break;
@@ -100,11 +101,58 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
   }
 }
 
-async function actualValue(page: Page, step: GeneratedTestStep): Promise<string | undefined> {
-  if (step.action === "assert_title") return sanitizeText(await page.title(), 500); if (step.action === "assert_url" || step.action === "goto") return sanitizeUrl(page.url()); return undefined;
+async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep): Promise<string | undefined> {
+  if (step.action === "assert_title") return sanitizeText(await page.title(), 500);
+  if (step.action === "assert_url" || step.action === "goto") return sanitizeUrl(page.url());
+  if (step.action === "assert_in_viewport") {
+    const candidate = step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
+    if (!candidate) return undefined;
+    const locator = resolveLocator(page, candidate);
+    const rect = await locator.evaluate((element) => {
+      const value = element.getBoundingClientRect();
+      return { top: Math.round(value.top), bottom: Math.round(value.bottom), viewportHeight: window.innerHeight };
+    });
+    const scroll = await page.evaluate(() => (window as any).__probeQaScroll || { eventCount: 0, startedY: window.scrollY, lastY: window.scrollY, maxDelta: 0 });
+    return `화면 내 도달(top ${rect.top}px / ${rect.viewportHeight}px) · 스크롤 이벤트 ${scroll.eventCount}회 · 이동 ${Math.round(scroll.lastY - scroll.startedY)}px`;
+  }
+  return undefined;
 }
 function baseStep(step: GeneratedTestStep, status: AutomatedStepResult["status"], errorMessage?: string): AutomatedStepResult { return { stepId: step.id, order: step.order, action: step.action, description: step.description, status, errorMessage }; }
 function isAssertion(step: GeneratedTestStep) { return step.action.startsWith("assert_"); }
+
+async function resetScrollTracking(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window as any;
+    state.__probeQaScroll = { eventCount: 0, startedY: window.scrollY, lastY: window.scrollY, maxDelta: 0 };
+    if (state.__probeQaScrollInstalled) return;
+    state.__probeQaScrollInstalled = true;
+    window.addEventListener("scroll", (event) => {
+      const current = state.__probeQaScroll;
+      if (!current) return;
+      const target = event.target;
+      const position = target instanceof HTMLElement ? target.scrollTop : window.scrollY;
+      current.eventCount += 1;
+      current.lastY = window.scrollY;
+      current.maxDelta = Math.max(current.maxDelta, Math.abs(position), Math.abs(window.scrollY - current.startedY));
+    }, true);
+  });
+}
+
+async function waitForInViewport(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {
+  await locator.waitFor({ state: "visible", timeout });
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    const reached = await locator.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const horizontal = rect.right > 0 && rect.left < window.innerWidth;
+      const vertical = rect.bottom > 0 && rect.top < window.innerHeight;
+      return horizontal && vertical;
+    }).catch(() => false);
+    if (reached) return;
+    await page.waitForTimeout(50);
+  }
+  throw new Error("대상 요소가 제한 시간 안에 화면 영역으로 이동하지 않았습니다.");
+}
 
 function captureIssues(page: Page, consoleIssues: CapturedConsoleMessage[], networkIssues: CapturedNetworkIssue[]) {
   page.on("console", (message) => { if (["error", "warning"].includes(message.type())) consoleIssues.push({ id: createId("console"), type: message.type() as "error" | "warning", text: sanitizeText(message.text(), 1000), recordedAt: new Date().toISOString() }); });

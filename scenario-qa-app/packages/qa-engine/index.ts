@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import type { AnalysisDetail, SiteAnalysisStatus } from "../../shared/types/analysis";
+import type { AnalysisDetail, RequirementDocumentAnalysis, SiteAnalysisStatus } from "../../shared/types/analysis";
 
 const terminal = new Set<SiteAnalysisStatus>(["completed", "partially_completed", "failed"]);
 
@@ -36,8 +36,10 @@ export async function runQaAnalysis(analysisId: string): Promise<void> {
   await update(client, analysisId, { status: "running", progress: 2, current_message: "GitHub Actions 실행기가 분석을 시작했습니다.", started_at: new Date().toISOString(), github_run_id: githubRunId, github_run_url: githubRunUrl });
   const workflow = await client.from("workflow_runs").insert({ analysis_id: analysisId, user_id: job.user_id, status: "running", runner_name: process.env.RUNNER_NAME || "local-cli", sha: process.env.GITHUB_SHA || null, github_run_id: githubRunId, github_run_url: githubRunUrl, payload: { runAttempt: process.env.GITHUB_RUN_ATTEMPT || null } }).select("id").single();
   try {
+    const documentAnalysis = await prepareRequirementDocument(client, analysisId);
+    await update(client, analysisId, { process_stage: "page_analysis", current_message: "2단계 페이지 분석과 테스트 시나리오 생성을 시작합니다." });
     const engine = await import("../../server/analysis/services/site-analysis.service");
-    const local = await engine.createSiteAnalysis(job.normalized_url, { mode: job.mode, maxPages: job.max_pages, maxDepth: job.max_depth, autoRunSafeTests: job.auto_run_safe_tests });
+    const local = await engine.createSiteAnalysis(job.normalized_url, { mode: job.mode, maxPages: job.max_pages, maxDepth: job.max_depth, autoRunSafeTests: false, documentAnalysis });
     let detail: AnalysisDetail;
     while (true) {
       detail = await engine.getAnalysisDetail(local.id);
@@ -50,7 +52,9 @@ export async function runQaAnalysis(analysisId: string): Promise<void> {
     detail = externalizeAnalysisId(detail, analysisId);
     await persistDetail(client, job.user_id, analysisId, detail, localAnalysisId);
     const finished = detail.analysis.status === "failed" ? "failed" : detail.analysis.status;
-    await update(client, analysisId, { status: finished, progress: 100, current_message: detail.analysis.currentMessage, summary: detail.analysis.summary || null, error: detail.analysis.error || null, completed_at: new Date().toISOString() });
+    const processStage = detail.analysis.status === "failed" ? "failed" : "scenario_review";
+    const currentMessage = detail.analysis.status === "failed" ? "2단계 페이지 분석에 실패했습니다." : "2단계가 완료되었습니다. 시나리오를 검토하고 테스트 실행을 확정해 주세요.";
+    await update(client, analysisId, { status: finished, process_stage: processStage, progress: 100, current_message: currentMessage, summary: detail.analysis.summary || null, error: detail.analysis.error || null, completed_at: new Date().toISOString() });
     if (workflow.data?.id) await client.from("workflow_runs").update({ status: finished, completed_at: new Date().toISOString() }).eq("id", workflow.data.id);
     if (detail.analysis.status === "failed") throw new Error(detail.analysis.error?.message || "QA analysis failed");
   } catch (cause) {
@@ -58,6 +62,29 @@ export async function runQaAnalysis(analysisId: string): Promise<void> {
     const message = cause instanceof Error ? cause.message : String(cause);
     await update(client, analysisId, { status: "failed", progress: 100, current_message: "분석 실행에 실패했습니다.", error: { code: "RUNNER_FAILED", message }, completed_at: new Date().toISOString() }).catch(() => undefined);
     if (workflow.data?.id) await client.from("workflow_runs").update({ status: "failed", completed_at: new Date().toISOString(), payload: { error: message } }).eq("id", workflow.data.id);
+    throw cause;
+  }
+}
+
+async function prepareRequirementDocument(client: SupabaseClient, analysisId: string): Promise<RequirementDocumentAnalysis | undefined> {
+  const { data: row, error } = await client.from("requirement_documents").select("*").eq("analysis_id", analysisId).maybeSingle();
+  if (error) throw error;
+  if (!row || row.status === "ignored") return undefined;
+  await update(client, analysisId, { process_stage: "document_analysis", current_message: "1단계 요구사항 PDF를 분석하고 있습니다." });
+  await client.from("requirement_documents").update({ status: "processing" }).eq("id", row.id);
+  try {
+    const { data, error: downloadError } = await client.storage.from("qa-requirements").download(row.storage_path);
+    if (downloadError || !data) throw downloadError || new Error("Requirement document download failed");
+    const { analyzeRequirementDocument } = await import("../../server/analysis/services/requirement-document.service");
+    const result = await analyzeRequirementDocument(new Uint8Array(await data.arrayBuffer()), row.file_name);
+    const { error: updateError } = await client.from("requirement_documents").update({ status: "completed", payload: result, error: null }).eq("id", row.id);
+    if (updateError) throw updateError;
+    return result;
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const documentError = { code: "DOCUMENT_ANALYSIS_FAILED", message };
+    await client.from("requirement_documents").update({ status: "failed", error: documentError }).eq("id", row.id);
+    await update(client, analysisId, { process_stage: "document_failed", current_message: "PDF 분석에 실패했습니다. 문서를 다시 등록하거나 문서 없이 계속해 주세요.", error: documentError });
     throw cause;
   }
 }

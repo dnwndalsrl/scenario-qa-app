@@ -1,4 +1,4 @@
-import type { AnalysisDetail, AnalysisSummary, AutomatedTestRun, CrawledPage, CrawlQueueItem, GeneratedTestScenario, PageDetail, PageSnapshot, SiteAnalysis, SiteAnalysisOptions, SiteAnalysisStatus, SiteAnalysisSummary, SiteMapEdge, TestDeduplicationResult } from "../../../shared/types/analysis";
+import type { AnalysisDetail, AnalysisSummary, AutomatedTestRun, CrawledPage, CrawlQueueItem, GeneratedTestScenario, PageDetail, PageSnapshot, RequirementDocumentAnalysis, SiteAnalysis, SiteAnalysisOptions, SiteAnalysisStatus, SiteAnalysisSummary, SiteMapEdge, TestDeduplicationResult } from "../../../shared/types/analysis";
 import { ANALYSIS_STAGES } from "../../../shared/types/analysis";
 import { AppError, ERROR_MESSAGES } from "../../../shared/errors";
 import { getAnalysisConfig } from "../../config";
@@ -31,8 +31,9 @@ import { deduplicateTests } from "./test-deduplication.service";
 let activeAnalysisId: string | undefined;
 const terminal = new Set<SiteAnalysisStatus>(["completed", "partially_completed", "failed"]);
 const deduplicationByAnalysis = new Map<string, TestDeduplicationResult>();
+const documentByAnalysis = new Map<string, RequirementDocumentAnalysis>();
 
-export async function createSiteAnalysis(targetUrl: string, overrides: Partial<SiteAnalysisOptions> = {}): Promise<SiteAnalysis> {
+export async function createSiteAnalysis(targetUrl: string, overrides: Partial<SiteAnalysisOptions> & { documentAnalysis?: RequirementDocumentAnalysis } = {}): Promise<SiteAnalysis> {
   if (activeAnalysisId) throw new AppError("ANALYSIS_ALREADY_RUNNING", undefined, 409);
   const normalizedUrl = await validateTargetUrl(targetUrl);
   const existing = (await analysisRepository.list()).find((item) => item.normalizedUrl === normalizedUrl && !terminal.has(item.status));
@@ -48,6 +49,7 @@ export async function createSiteAnalysis(targetUrl: string, overrides: Partial<S
     respectNoFollow: overrides.respectNoFollow ?? config.crawlRespectNoFollow
   };
   const analysis: SiteAnalysis = { id: createId("analysis"), targetUrl, normalizedUrl, status: "pending", progress: 2, currentMessage: "분석 작업을 준비하고 있습니다.", options, pageIds: [], pageAnalysisIds: [], generatedTestIds: [], testRunIds: [], createdAt: now, updatedAt: now };
+  if (overrides.documentAnalysis) documentByAnalysis.set(analysis.id, overrides.documentAnalysis);
   await analysisRepository.save(analysis); void runAnalysis(analysis.id).catch(() => undefined); return analysis;
 }
 
@@ -63,15 +65,16 @@ export async function runAnalysis(id: string): Promise<void> {
   activeAnalysisId = id;
   try { const analysis = await requireAnalysis(id); if (analysis.options.mode === "site_crawl") await runSiteCrawl(analysis); else await runSinglePage(analysis); }
   catch (error) { await failAnalysis(id, error); }
-  finally { if (activeAnalysisId === id) activeAnalysisId = undefined; }
+  finally { if (activeAnalysisId === id) activeAnalysisId = undefined; documentByAnalysis.delete(id); }
 }
 
 async function runSinglePage(initial: SiteAnalysis) {
   const id = initial.id; let analysis = (await updateStage(id, "launching_browser", { startedAt: new Date().toISOString() }))!;
+  const document = documentByAnalysis.get(id);
   const snapshot = await collectPage(id, analysis.normalizedUrl, analysis.options.viewport, analysis.options.timeoutMs, async (stage) => { await updateStage(id, stage); });
   await snapshotRepository.save(snapshot); await analysisRepository.update(id, { pageSnapshotId: snapshot.id });
-  await updateStage(id, "analyzing_page"); const pageAnalysis = await analyzePageWithAi(snapshot); await pageAnalysisRepository.save(pageAnalysis); await analysisRepository.update(id, { pageAnalysisId: pageAnalysis.id, pageAnalysisIds: [pageAnalysis.id] });
-  await updateStage(id, "generating_tests"); const tests = await generateTestsWithAi(snapshot, pageAnalysis); for (const test of tests) await generatedTestRepository.save(test); await analysisRepository.update(id, { generatedTestIds: tests.map((test) => test.id) });
+  await updateStage(id, "analyzing_page"); const pageAnalysis = await analyzePageWithAi(snapshot, document); await pageAnalysisRepository.save(pageAnalysis); await analysisRepository.update(id, { pageAnalysisId: pageAnalysis.id, pageAnalysisIds: [pageAnalysis.id] });
+  await updateStage(id, "generating_tests"); const tests = await generateTestsWithAi(snapshot, pageAnalysis, document); for (const test of tests) await generatedTestRepository.save(test); await analysisRepository.update(id, { generatedTestIds: tests.map((test) => test.id) });
   await updateStage(id, "running_tests"); const runs = analysis.options.autoRunSafeTests ? await executeGeneratedTests(snapshot, tests) : []; for (const run of runs) await automatedTestRunRepository.save(run);
   const summary = buildSummary(snapshot, pageAnalysis, tests, runs);
   await updateStage(id, "completed", { testRunIds: runs.map((run) => run.id), summary, completedAt: new Date().toISOString(), error: undefined });
@@ -79,6 +82,7 @@ async function runSinglePage(initial: SiteAnalysis) {
 
 async function runSiteCrawl(initial: SiteAnalysis) {
   const config = getAnalysisConfig(); const started = Date.now(); const id = initial.id; const origin = new URL(initial.normalizedUrl).origin;
+  const document = documentByAnalysis.get(id);
   const queue = new CrawlQueue(initial.options.maxDepth, initial.options.maxPages, config.maxPagesPerUrlPattern);
   const edges: SiteMapEdge[] = []; const pages: CrawledPage[] = []; const snapshots = new Map<string, PageSnapshot>(); const pageByNormalized = new Map<string, CrawledPage>(); const finalUrlToPage = new Map<string, CrawledPage>(); const fingerprintToPage = new Map<string, CrawledPage>();
   const limitReasons = new Set<string>(); let skippedCount = 0; let failedCount = 0; let discoveredUrlCount = 1;
@@ -123,7 +127,7 @@ async function runSiteCrawl(initial: SiteAnalysis) {
   const aiAnalyses = []; let analysisFailures = 0; await updateStage(id, "analyzing_pages", { crawlState: crawlState() });
   for (const page of pages.filter((value) => value.status === "collected")) {
     const snapshot = snapshots.get(page.id)!;
-    try { const ai = await analyzePageWithAi(snapshot); await pageAnalysisRepository.save(ai); aiAnalyses.push(ai); page.status = "analyzed"; page.pageAnalysisId = ai.id; await crawlPageRepository.save(page); }
+    try { const ai = await analyzePageWithAi(snapshot, document); await pageAnalysisRepository.save(ai); aiAnalyses.push(ai); page.status = "analyzed"; page.pageAnalysisId = ai.id; await crawlPageRepository.save(page); }
     catch (error) { analysisFailures += 1; page.error = { code: toAppError(error, "AI_PAGE_ANALYSIS_FAILED").code, message: toAppError(error, "AI_PAGE_ANALYSIS_FAILED").message }; await crawlPageRepository.save(page); }
   }
   await analysisRepository.update(id, { pageAnalysisIds: aiAnalyses.map((value) => value.id) });
@@ -132,7 +136,7 @@ async function runSiteCrawl(initial: SiteAnalysis) {
   await updateStage(id, "generating_tests"); const generated: GeneratedTestScenario[] = [];
   for (const pageAnalysis of aiAnalyses) {
     const snapshot = snapshots.get(pageAnalysis.pageId!)!;
-    try { generated.push(...(await generateTestsWithAi(snapshot, pageAnalysis)).slice(0, config.maxTestsPerPage)); }
+    try { generated.push(...(await generateTestsWithAi(snapshot, pageAnalysis, document)).slice(0, config.maxTestsPerPage)); }
     catch { analysisFailures += 1; }
     if (generated.length >= config.maxTotalGeneratedTests) break;
   }

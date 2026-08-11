@@ -1,4 +1,4 @@
-import type { AiPageAnalysis, GeneratedTestScenario, PageSnapshot } from "../../../shared/types/analysis";
+import type { AiPageAnalysis, GeneratedTestScenario, PageSnapshot, RequirementDocumentAnalysis } from "../../../shared/types/analysis";
 import { generatedTestResponseSchema } from "../../../shared/schemas/analysis";
 import { AppError } from "../../../shared/errors";
 import { getAnalysisConfig } from "../../config";
@@ -10,21 +10,23 @@ import type { z } from "zod";
 
 type GeneratedPayload = z.infer<typeof generatedTestResponseSchema>;
 
-export async function generateTestsWithAi(snapshot: PageSnapshot, analysis: AiPageAnalysis): Promise<GeneratedTestScenario[]> {
+export async function generateTestsWithAi(snapshot: PageSnapshot, analysis: AiPageAnalysis, document?: RequirementDocumentAnalysis): Promise<GeneratedTestScenario[]> {
   const config = getAnalysisConfig();
   const input = {
     page: { url: snapshot.finalUrl, title: snapshot.title, headings: snapshot.headings, pageType: analysis.pageType, purpose: analysis.pagePurpose },
     functions: analysis.primaryFunctions, opportunities: analysis.testOpportunities,
     elements: snapshot.elements.map(({ id, type, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates, safetyHints }) => ({ id, type, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates: locatorCandidates.filter((candidate) => candidate.unique).slice(0, 3), safetyHints })),
+    requirements: document?.requirements || [],
     limits: { maxScenarios: config.maxGeneratedScenarios, maxStepsPerScenario: config.maxStepsPerScenario }, testMode: "read_only"
   };
   const raw = await requestStructuredJson({ apiKey: config.openaiApiKey, model: config.testGenerationModel, system: TEST_GENERATION_SYSTEM_PROMPT, input, schema: generatedTestResponseSchema, schemaName: "generated_tests", failureCode: "AI_TEST_GENERATION_FAILED", invalidCode: "AI_TEST_GENERATION_INVALID_RESPONSE" });
-  return validateGeneratedTestPayload(raw, snapshot);
+  return validateGeneratedTestPayload(raw, snapshot, document);
 }
 
-export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: PageSnapshot): GeneratedTestScenario[] {
+export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: PageSnapshot, document?: RequirementDocumentAnalysis): GeneratedTestScenario[] {
   const config = getAnalysisConfig();
   const elements = new Map(snapshot.elements.map((element) => [element.id, element]));
+  const requirementIds = new Set(document?.requirements.map((item) => item.id) || []);
   return raw.scenarios.slice(0, config.maxGeneratedScenarios).map((scenario) => {
     if (scenario.sourceElementIds.some((id) => !elements.has(id))) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Unknown source element id");
     const steps = scenario.steps.slice(0, config.maxStepsPerScenario).map((step, index) => {
@@ -33,6 +35,6 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       if (step.locator && (!element || !element.locatorCandidates.some((candidate) => candidate.strategy === step.locator!.strategy && candidate.value === step.locator!.value && candidate.unique))) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not unique");
       return { ...step, elementId: step.elementId ?? undefined, locator: step.locator ?? undefined, value: step.value ?? undefined, expected: step.expected ?? undefined, timeoutMs: step.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(step.evidence || []), ...(step.elementId ? [`근거 요소: ${step.elementId}`] : [])])] };
     });
-    return enforceSafety({ ...scenario, id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
+    return enforceSafety({ ...scenario, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
   });
 }

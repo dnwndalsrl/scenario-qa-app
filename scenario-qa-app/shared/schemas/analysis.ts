@@ -41,10 +41,19 @@ export const generatedTestResponseSchema = z.object({
     title: z.string().min(1).max(160), description: z.string().max(500), purpose: z.string().max(500),
     category: z.enum(["page_load", "navigation", "visibility", "accessibility", "form_validation", "search", "interaction", "error_detection"]),
     safetyLevel: z.enum(["safe", "review_required", "blocked"]), confidence: z.number().min(0).max(1), autoExecutable: z.boolean(),
-    sourceElementIds: elementIds,
+    sourceElementIds: elementIds, requirementIds: elementIds,
     steps: z.array(z.object({
-      order: z.number().int().positive(), action: z.enum(["goto", "assert_url", "assert_title", "assert_visible", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]),
+      order: z.number().int().positive(), action: z.enum(["goto", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]),
       description: z.string().min(1).max(300), elementId: z.string().nullable(), locator: locatorCandidateSchema.nullable(), value: z.string().max(500).nullable(), expected: z.string().max(500).nullable(), timeoutMs: z.number().int().min(1000).max(30000).nullable(), evidence: z.array(z.string().max(300)).max(10)
     })).min(1).max(10)
   })).min(1).max(10)
+});
+
+export const requirementDocumentResponseSchema = z.object({
+  summary: z.string().max(2000),
+  requirements: z.array(z.object({
+    id: z.string().min(1).max(80), title: z.string().min(1).max(200), description: z.string().max(1000),
+    expectedBehavior: z.string().min(1).max(1000), priority: z.enum(["low", "medium", "high"]), sourceReference: z.string().max(300)
+  })).max(40),
+  limitations: z.array(z.string().max(500)).max(20)
 });

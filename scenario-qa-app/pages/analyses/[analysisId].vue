@@ -68,7 +68,9 @@ function applyRealtimeUpdate(row: Record<string, unknown>) {
     updatedAt: typeof row.updated_at === "string" ? row.updated_at : current.updatedAt,
     startedAt: typeof row.started_at === "string" ? row.started_at : current.startedAt,
     completedAt: typeof row.completed_at === "string" ? row.completed_at : undefined,
-    error: row.error && typeof row.error === "object" ? row.error as AnalysisDetail["analysis"]["error"] : undefined
+    error: row.error && typeof row.error === "object" ? row.error as AnalysisDetail["analysis"]["error"] : undefined,
+    processStage: typeof row.process_stage === "string" ? row.process_stage as AnalysisDetail["analysis"]["processStage"] : current.processStage,
+    scenariosApprovedAt: typeof row.scenarios_approved_at === "string" ? row.scenarios_approved_at : current.scenariosApprovedAt
   };
   // Nuxt 4의 useFetch 데이터는 얕은 ref일 수 있으므로 객체를 교체해야 화면이 다시 렌더링된다.
   data.value = { ...data.value, analysis: updated };
@@ -170,6 +172,20 @@ async function cancel() {
     busy.value = false;
   }
 }
+
+async function runApproved() {
+  busy.value = true; actionError.value = "";
+  try { await $api(`${endpoint.value}/run`, { method: "POST" }); await refreshDetail(); }
+  catch (cause: any) { actionError.value = cause?.data?.statusMessage || cause?.message || "테스트 실행 요청에 실패했습니다."; }
+  finally { busy.value = false; }
+}
+
+async function continueWithoutDocument() {
+  busy.value = true; actionError.value = "";
+  try { await $api(`${endpoint.value}/documents/continue`, { method: "POST" }); await refreshDetail(); }
+  catch (cause: any) { actionError.value = cause?.data?.statusMessage || cause?.message || "문서 없이 계속하지 못했습니다."; }
+  finally { busy.value = false; }
+}
 </script>
 
 <template>
@@ -181,7 +197,9 @@ async function cancel() {
         <p class="report-url">{{ data.analysis.normalizedUrl }}</p>
       </div>
       <div>
-        <button v-if="terminal.includes(data.analysis.status)" class="primary-button" :disabled="busy" @click="retry">다시 분석</button>
+        <button v-if="data.analysis.processStage === 'scenario_review'" class="primary-button" :disabled="busy" @click="runApproved">시나리오 확정 및 테스트 실행</button>
+        <button v-else-if="data.analysis.processStage === 'document_failed'" class="primary-button" :disabled="busy" @click="continueWithoutDocument">문서 없이 계속</button>
+        <button v-else-if="data.analysis.processStage === 'report_complete' || data.analysis.processStage === 'failed'" class="primary-button" :disabled="busy" @click="retry">다시 분석</button>
         <button v-else class="primary-button" :disabled="busy" @click="cancel">취소 요청</button>
       </div>
     </header>
@@ -190,14 +208,17 @@ async function cancel() {
       <span>{{ realtimeWarning }}</span>
       <button type="button" :disabled="busy" @click="refreshDetail">상태 새로고침</button>
     </div>
+    <AnalysisProcessSteps :stage="data.analysis.processStage" :has-document="Boolean(data.documentAnalysis)" />
+    <RequirementDocumentPanel :document="data.documentAnalysis" />
     <AnalysisProgress :analysis="data.analysis" />
-    <AnalysisSummary v-if="data.analysis.summary" :summary="data.analysis.summary" />
-    <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" />
+    <AnalysisSummary v-if="data.analysis.summary && data.analysis.processStage === 'report_complete'" :summary="data.analysis.summary" />
+    <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" @changed="refreshDetail" />
+    <TestRunResult v-if="data.analysis.options.mode === 'site_crawl' && data.analysis.processStage === 'report_complete'" :runs="data.testRuns" :tests="data.generatedTests" />
     <template v-else-if="data.snapshot && data.pageAnalysis">
       <PageOverview :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
       <DiscoveredFunctions :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
-      <GeneratedTestList :tests="data.generatedTests" :snapshot="data.snapshot" />
-      <TestRunResult :runs="data.testRuns" :tests="data.generatedTests" />
+      <GeneratedTestList :analysis-id="data.analysis.id" :tests="data.generatedTests" :snapshot="data.snapshot" :runs="data.testRuns" :review-mode="data.analysis.processStage === 'scenario_review'" @changed="refreshDetail" />
+      <TestRunResult v-if="data.analysis.processStage === 'report_complete'" :runs="data.testRuns" :tests="data.generatedTests" />
       <IssueList :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
     </template>
     <div v-else-if="terminal.includes(data.analysis.status) && data.analysis.error" class="error-box">{{ data.analysis.error.message }}</div>
