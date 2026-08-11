@@ -17,12 +17,15 @@ jobs:
           git apply /tmp/scenario-dispatch.patch
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: scenario-qa-app/package-lock.json
+      - name: Promote OpenAI SDK to runtime dependency
+        working-directory: scenario-qa-app
+        run: node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json'));pkg.dependencies.openai=pkg.optionalDependencies.openai;delete pkg.optionalDependencies.openai;fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');const lock=JSON.parse(fs.readFileSync('package-lock.json'));lock.packages[''].dependencies.openai=lock.packages[''].optionalDependencies.openai;delete lock.packages[''].optionalDependencies.openai;delete lock.packages['node_modules/openai'].optional;fs.writeFileSync('package-lock.json',JSON.stringify(lock,null,2)+'\n')"
       - name: Install dependencies
         working-directory: scenario-qa-app
-        run: npm ci --include=optional && npm install --no-save openai@7.2.0
+        run: npm ci
       - name: Install Chromium
         working-directory: scenario-qa-app
         run: npx playwright install --with-deps chromium
