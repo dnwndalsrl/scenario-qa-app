@@ -1,7 +1,7 @@
 import type { AutomatedTestRun, GeneratedTestScenario } from "../../../../shared/types/analysis";
 import { getOwnedAnalysis } from "../../../services/analysis-records.service";
 import { dispatchApprovedTestsWorkflow, githubConfigFromRuntime } from "../../../services/github-actions.service";
-import { createServiceSupabaseClient, requireUser } from "../../../services/supabase.service";
+import { requireUser } from "../../../services/supabase.service";
 import { createId } from "../../../utils/id";
 
 export default defineEventHandler(async (event) => {
@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const analysisId = getRouterParam(event, "analysisId") || "";
   const analysis = await getOwnedAnalysis(client, analysisId);
   if (analysis.process_stage !== "scenario_review") throw createError({ statusCode: 409, statusMessage: "시나리오 검토 단계에서만 전체 테스트를 확정할 수 있습니다." });
-  const admin = createServiceSupabaseClient(event);
+  const admin = client;
   const { data: rows, error } = await admin.from("generated_tests").select("*").eq("analysis_id", analysisId).eq("safety_level", "safe").eq("auto_executable", true).order("created_at");
   if (error) throw createError({ statusCode: 500, statusMessage: "실행할 시나리오를 조회하지 못했습니다." });
   if (!rows?.length) throw createError({ statusCode: 409, statusMessage: "실행 가능한 안전한 시나리오가 없습니다." });
@@ -27,15 +27,21 @@ export default defineEventHandler(async (event) => {
   });
   const { error: insertError } = await admin.from("test_runs").insert(values);
   if (insertError) throw createError({ statusCode: 500, statusMessage: "테스트 실행 기록을 만들지 못했습니다." });
-  const approvedAt = new Date().toISOString();
-  await admin.from("analyses").update({ status: "dispatching", process_stage: "test_execution", progress: 85, current_message: "3단계 테스트 실행을 요청하고 있습니다.", scenarios_approved_at: approvedAt, completed_at: null, error: null }).eq("id", analysisId);
+  const { error: dispatchingError } = await client.rpc("set_scenario_test_dispatch_state", {
+    p_analysis_id: analysisId, p_status: "dispatching", p_message: "3단계 테스트 실행을 요청하고 있습니다.", p_error: null
+  });
+  if (dispatchingError) throw createError({ statusCode: 500, statusMessage: "테스트 실행 상태를 저장하지 못했습니다." });
   try {
     await dispatchApprovedTestsWorkflow(analysisId, githubConfigFromRuntime(useRuntimeConfig(event)));
-    await admin.from("analyses").update({ status: "dispatched", current_message: "3단계 확정 시나리오 실행 대기 중입니다." }).eq("id", analysisId);
+    await client.rpc("set_scenario_test_dispatch_state", {
+      p_analysis_id: analysisId, p_status: "dispatched", p_message: "3단계 확정 시나리오 실행 대기 중입니다.", p_error: null
+    });
   } catch {
     const failed = { code: "WORKFLOW_DISPATCH_FAILED", message: "GitHub Actions 실행 요청에 실패했습니다." };
     await admin.from("test_runs").update({ status: "error" }).eq("analysis_id", analysisId).eq("status", "pending");
-    await admin.from("analyses").update({ status: "dispatch_failed", process_stage: "failed", progress: 100, error: failed }).eq("id", analysisId);
+    await client.rpc("set_scenario_test_dispatch_state", {
+      p_analysis_id: analysisId, p_status: "dispatch_failed", p_message: failed.message, p_error: failed
+    });
     throw createError({ statusCode: 502, statusMessage: failed.message });
   }
   setResponseStatus(event, 202);
