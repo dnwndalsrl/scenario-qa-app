@@ -51,9 +51,13 @@ export const generatedTestResponseSchema = z.object({
 
 export const requirementDocumentResponseSchema = z.object({
   summary: z.string().max(2000),
+  documentType: z.enum(["requirement_spec", "planning_document", "mixed", "unrelated"]),
+  qaSuitability: z.enum(["suitable", "review_required", "unsuitable"]),
+  confidence: z.number().min(0).max(1),
   requirements: z.array(z.object({
     id: z.string().min(1).max(80), title: z.string().min(1).max(200), description: z.string().max(1000),
     expectedBehavior: z.string().min(1).max(1000), priority: z.enum(["low", "medium", "high"]), sourceReference: z.string().max(300)
   })).max(40),
-  limitations: z.array(z.string().max(500)).max(20)
+  limitations: z.array(z.string().max(500)).max(20),
+  missingInformation: z.array(z.string().max(500)).max(20)
 });

@@ -45,7 +45,10 @@ export interface SiteAnalysis {
 export interface RequirementItem { id: string; title: string; description: string; expectedBehavior: string; priority: "low" | "medium" | "high"; sourceReference: string; }
 export interface RequirementDocumentAnalysis {
   fileName: string; status: "pending" | "processing" | "completed" | "failed" | "ignored"; summary?: string;
-  requirements: RequirementItem[]; limitations: string[]; pageCount?: number; extractedCharacters?: number; analyzedAt?: string; error?: AnalysisError;
+  requirements: RequirementItem[]; limitations: string[]; missingInformation: string[];
+  documentType?: "requirement_spec" | "planning_document" | "mixed" | "unrelated";
+  qaSuitability?: "suitable" | "review_required" | "unsuitable"; confidence?: number;
+  pageCount?: number; extractedCharacters?: number; analyzedAt?: string; error?: AnalysisError;
 }
 export interface LinkPriorityScore { total: number; reasons: string[]; }
 export interface CrawlQueueItem {
