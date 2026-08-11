@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: scenario-qa-app/package-lock.json
       - name: Install dependencies
         working-directory: scenario-qa-app
-        run: npm ci
+        run: npm ci --include=optional && npm install --no-save openai@7.2.0
       - name: Install Chromium
         working-directory: scenario-qa-app
         run: npx playwright install --with-deps chromium
