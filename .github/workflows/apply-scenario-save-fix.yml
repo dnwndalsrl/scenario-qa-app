@@ -9,7 +9,7 @@ permissions:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Write verified files
@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         working-directory: scenario-qa-app
         run: npm ci
+      - name: Install Chromium
+        working-directory: scenario-qa-app
+        run: npx playwright install --with-deps chromium
       - name: Verify change
         working-directory: scenario-qa-app
         run: npm run check
