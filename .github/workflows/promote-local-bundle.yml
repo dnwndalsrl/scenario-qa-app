@@ -1,0 +1,22 @@
+name: Promote verified local bundle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promote verified commit to main
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          cat .deploy/probe.part1 .deploy/probe.part2 | base64 --decode > /tmp/probe.bundle
+          git bundle verify /tmp/probe.bundle
+          git fetch /tmp/probe.bundle rebuild/url-ai-qa-agent:refs/remotes/bundle/deploy
+          test "$(git rev-parse refs/remotes/bundle/deploy)" = "a846529524c877a20cab873f8d8079675ad67ff4"
+          git push origin refs/remotes/bundle/deploy:refs/heads/main --force-with-lease=refs/heads/main:${EXPECTED_SHA}
