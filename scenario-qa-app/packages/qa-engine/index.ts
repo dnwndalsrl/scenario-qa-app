@@ -79,7 +79,7 @@ async function prepareRequirementDocument(client: SupabaseClient, analysisId: st
     const result = await analyzeRequirementDocument(new Uint8Array(await data.arrayBuffer()), row.file_name);
     const { error: updateError } = await client.from("requirement_documents").update({ status: "completed", payload: result, error: null }).eq("id", row.id);
     if (updateError) throw updateError;
-    return result;
+    return result.qaSuitability === "unsuitable" ? undefined : result;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     const documentError = { code: "DOCUMENT_ANALYSIS_FAILED", message };

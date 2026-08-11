@@ -9,6 +9,7 @@ const dailyLimitSql = readFileSync(new URL("./migrations/202608100003_raise_dail
 const realtimeSql = readFileSync(new URL("./migrations/202608060001_enable_analysis_realtime.sql", import.meta.url), "utf8");
 const broadcastSql = readFileSync(new URL("./migrations/202608060002_analysis_private_broadcast.sql", import.meta.url), "utf8");
 const threeStageSql = readFileSync(new URL("./migrations/202608110001_three_stage_analysis.sql", import.meta.url), "utf8");
+const requirementUploadSql = readFileSync(new URL("./migrations/202608110002_authenticated_requirement_upload.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -67,5 +68,14 @@ describe("Supabase migration security", () => {
     expect(threeStageSql).toContain("values('qa-requirements','qa-requirements',false,10485760");
     expect(threeStageSql).toContain("'process_stage', new.process_stage");
     expect(threeStageSql).toContain("'scenarios_approved_at', new.scenarios_approved_at");
+  });
+
+  it("allows authenticated users to save PDFs only below their own storage path", () => {
+    expect(requirementUploadSql).toContain("create policy requirement_documents_insert_own");
+    expect(requirementUploadSql).toContain("create policy qa_requirements_insert_own");
+    expect(requirementUploadSql).toContain("(storage.foldername(name))[1] = (select auth.uid()::text)");
+    expect(requirementUploadSql).toContain("fail_analysis_document_upload");
+    expect(requirementUploadSql).toContain("set_analysis_dispatch_state");
+    expect(requirementUploadSql).toContain("p_status not in ('dispatching', 'dispatched', 'dispatch_failed')");
   });
 });

@@ -5,6 +5,8 @@ describe("UI 상태 한글 표시", () => {
   it.each([
     ["safe", "안전"],
     ["review_required", "검토 필요"],
+    ["suitable", "요구사항 적합"],
+    ["unsuitable", "요구사항 부족"],
     ["blocked", "차단"],
     ["success", "성공"],
     ["failed", "실패"],

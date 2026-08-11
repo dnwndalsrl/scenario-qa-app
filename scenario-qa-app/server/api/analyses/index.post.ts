@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { validatePublicTargetUrl } from "../../security/public-url-validator";
 import { dispatchAnalysisWorkflow, githubConfigFromRuntime } from "../../services/github-actions.service";
-import { createServiceSupabaseClient, requireUser } from "../../services/supabase.service";
+import { requireUser } from "../../services/supabase.service";
+import { RequirementDocumentSaveError, saveRequirementDocument } from "../../services/requirement-document-storage.service";
 
 const requestSchema = z.object({
   url: z.string().trim().min(1).max(2048),
@@ -44,29 +45,52 @@ export default defineEventHandler(async (event) => {
   const job = Array.isArray(data) ? data[0] : data;
   if (!job?.id) throw createError({ statusCode: 500, statusMessage: "분석 작업을 생성하지 못했습니다." });
 
-  const admin = createServiceSupabaseClient();
   const processStage = pdf ? "document_analysis" : "page_analysis";
   if (pdf) {
-    const storagePath = `${user.id}/${job.id}/requirements.pdf`;
-    const { error: uploadError } = await admin.storage.from("qa-requirements").upload(storagePath, pdf.data, { contentType: "application/pdf", upsert: false });
-    const { error: rowError } = uploadError ? { error: uploadError } : await admin.from("requirement_documents").insert({
-      analysis_id: job.id, user_id: user.id, file_name: (pdf.filename || "requirements.pdf").slice(0, 240), storage_path: storagePath,
-      status: "pending", payload: { fileName: pdf.filename || "requirements.pdf", status: "pending", requirements: [], limitations: [] }
-    });
-    if (uploadError || rowError) {
-      await admin.from("analyses").update({ status: "failed", process_stage: "document_failed", progress: 100, current_message: "PDF 저장에 실패했습니다.", error: { code: "DOCUMENT_UPLOAD_FAILED", message: "PDF 저장에 실패했습니다." } }).eq("id", job.id);
-      throw createError({ statusCode: 500, statusMessage: "PDF 저장에 실패했습니다." });
+    try {
+      await saveRequirementDocument(client, {
+        analysisId: job.id,
+        userId: user.id,
+        fileName: pdf.filename || "requirements.pdf",
+        bytes: pdf.data
+      });
+    } catch (cause) {
+      const code = cause instanceof RequirementDocumentSaveError ? cause.code : "PDF_SAVE_FAILED";
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      console.error("[requirement-document-save]", { analysisId: job.id, code, detail });
+      await client.rpc("fail_analysis_document_upload", { p_analysis_id: job.id, p_error_code: code });
+      throw createError({ statusCode: 500, message: "PDF 저장에 실패했습니다.", data: { code } });
     }
   }
 
-  await admin.from("analyses").update({ status: "dispatching", process_stage: processStage, current_message: pdf ? "1단계 PDF 분석을 요청하고 있습니다." : "2단계 페이지 분석을 요청하고 있습니다." }).eq("id", job.id);
+  const { error: dispatchingError } = await client.rpc("set_analysis_dispatch_state", {
+    p_analysis_id: job.id,
+    p_status: "dispatching",
+    p_process_stage: processStage,
+    p_message: pdf ? "1단계 PDF 분석을 요청하고 있습니다." : "2단계 페이지 분석을 요청하고 있습니다.",
+    p_error: null
+  });
+  if (dispatchingError) throw createError({ statusCode: 500, message: "분석 실행 상태를 저장하지 못했습니다.", data: { code: "DISPATCH_STATE_FAILED" } });
   try {
     await dispatchAnalysisWorkflow(job.id, githubConfigFromRuntime(useRuntimeConfig(event)));
-    await admin.from("analyses").update({ status: "dispatched", current_message: pdf ? "1단계 문서 분석 실행 대기 중입니다." : "2단계 페이지 분석 실행 대기 중입니다." }).eq("id", job.id);
+    const { error: dispatchedError } = await client.rpc("set_analysis_dispatch_state", {
+      p_analysis_id: job.id,
+      p_status: "dispatched",
+      p_process_stage: processStage,
+      p_message: pdf ? "1단계 문서 분석 실행 대기 중입니다." : "2단계 페이지 분석 실행 대기 중입니다.",
+      p_error: null
+    });
+    if (dispatchedError) console.error("[analysis-dispatch-state]", { analysisId: job.id, detail: dispatchedError.message });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Workflow dispatch failed";
-    await admin.from("analyses").update({ status: "dispatch_failed", process_stage: "failed", progress: 100, current_message: "실행 요청에 실패했습니다.", error: { code: "WORKFLOW_DISPATCH_FAILED", message }, completed_at: new Date().toISOString() }).eq("id", job.id);
-    throw createError({ statusCode: 502, statusMessage: "GitHub Actions 실행 요청에 실패했습니다.", data: { code: "WORKFLOW_DISPATCH_FAILED" } });
+    await client.rpc("set_analysis_dispatch_state", {
+      p_analysis_id: job.id,
+      p_status: "dispatch_failed",
+      p_process_stage: "failed",
+      p_message: "실행 요청에 실패했습니다.",
+      p_error: { code: "WORKFLOW_DISPATCH_FAILED", message }
+    });
+    throw createError({ statusCode: 502, message: "GitHub Actions 실행 요청에 실패했습니다.", data: { code: "WORKFLOW_DISPATCH_FAILED" } });
   }
   setResponseStatus(event, 202);
   return { analysisId: job.id, status: "dispatched" };

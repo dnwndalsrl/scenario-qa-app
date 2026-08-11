@@ -5,6 +5,16 @@ import { getAnalysisConfig } from "../../config";
 import { REQUIREMENT_DOCUMENT_SYSTEM_PROMPT } from "../prompts/requirement-document.prompt";
 import { requestStructuredJson } from "./openai-json.service";
 
+type RequirementResponse = ReturnType<typeof requirementDocumentResponseSchema.parse>;
+
+export function normalizeRequirementAssessment(result: RequirementResponse): RequirementResponse {
+  if (!result.requirements.length || result.confidence < .5) return { ...result, qaSuitability: "unsuitable" };
+  if (result.qaSuitability === "suitable" && (result.confidence < .75 || result.missingInformation.length)) {
+    return { ...result, qaSuitability: "review_required" };
+  }
+  return result;
+}
+
 export async function extractPdfText(bytes: Uint8Array): Promise<{ text: string; pageCount: number }> {
   const parser = new PDFParse({ data: bytes });
   try {
@@ -18,10 +28,10 @@ export async function analyzeRequirementDocument(bytes: Uint8Array, fileName: st
   if (extracted.text.length < 20) throw new Error("PDF에서 분석 가능한 텍스트를 찾지 못했습니다. 이미지 PDF는 OCR 처리 후 다시 등록해 주세요.");
   const text = extracted.text.slice(0, 60000);
   const config = getAnalysisConfig();
-  const result = await requestStructuredJson({
+  const result = normalizeRequirementAssessment(await requestStructuredJson({
     apiKey: config.openaiApiKey, model: config.pageAnalysisModel, system: REQUIREMENT_DOCUMENT_SYSTEM_PROMPT,
     input: { fileName, pageCount: extracted.pageCount, documentText: text }, schema: requirementDocumentResponseSchema,
     schemaName: "requirement_document", failureCode: "AI_DOCUMENT_ANALYSIS_FAILED", invalidCode: "AI_DOCUMENT_ANALYSIS_INVALID_RESPONSE"
-  });
+  }));
   return { fileName, status: "completed", ...result, pageCount: extracted.pageCount, extractedCharacters: text.length, analyzedAt: new Date().toISOString() };
 }

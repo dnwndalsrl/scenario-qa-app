@@ -53,7 +53,7 @@ export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: 
     testRuns,
     pages,
     documentAnalysis: documentResult.data ? {
-      fileName: documentResult.data.file_name, requirements: [], limitations: [],
+      fileName: documentResult.data.file_name, requirements: [], limitations: [], missingInformation: [],
       ...(documentResult.data.payload || {}), status: documentResult.data.status, error: documentResult.data.error || undefined
     } : undefined,
     siteMap: payload.siteMap, siteAnalysis: payload.siteAnalysis, testDeduplication: payload.testDeduplication
