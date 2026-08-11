@@ -7,9 +7,13 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+export function resolveSupabaseUrl(config: { supabaseUrl?: unknown; public?: { supabaseUrl?: unknown } }): string {
+  return String(config.public?.supabaseUrl || config.supabaseUrl || "");
+}
+
 export function createUserSupabaseClient(event: H3Event): SupabaseClient {
   const config = useRuntimeConfig(event);
-  const url = required("SUPABASE_URL", String(config.public.supabaseUrl || config.supabaseUrl || ""));
+  const url = required("SUPABASE_URL", resolveSupabaseUrl(config));
   const key = required("NUXT_PUBLIC_SUPABASE_ANON_KEY", String(config.public.supabaseAnonKey || ""));
   return createServerClient(url, key, {
     cookies: {
@@ -24,7 +28,7 @@ export function createUserSupabaseClient(event: H3Event): SupabaseClient {
 export function createServiceSupabaseClient(): SupabaseClient {
   const config = useRuntimeConfig();
   return createClient(
-    required("SUPABASE_URL", String(config.supabaseUrl || "")),
+    required("SUPABASE_URL", resolveSupabaseUrl(config)),
     required("SUPABASE_SERVICE_ROLE_KEY", String(config.supabaseServiceRoleKey || "")),
     { auth: { persistSession: false, autoRefreshToken: false } }
   );

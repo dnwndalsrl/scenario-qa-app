@@ -1,5 +1,6 @@
 import type { AutomatedTestRun, GeneratedTestScenario } from "../../../../../../shared/types/analysis";
 import { getOwnedAnalysis } from "../../../../../services/analysis-records.service";
+import { getGeneratedTestRow } from "../../../../../services/generated-test-record.service";
 import { dispatchTestWorkflow, githubConfigFromRuntime } from "../../../../../services/github-actions.service";
 import { createServiceSupabaseClient, requireUser } from "../../../../../services/supabase.service";
 import { createId } from "../../../../../utils/id";
@@ -14,8 +15,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const admin = createServiceSupabaseClient();
-  const { data: testRow, error: testError } = await admin.from("generated_tests").select("*").eq("analysis_id", analysisId).eq("source_id", testId).single();
-  if (testError || !testRow) throw createError({ statusCode: 404, statusMessage: "테스트 시나리오를 찾을 수 없습니다." });
+  const testRow = await getGeneratedTestRow(admin, analysisId, testId);
   const scenario = testRow.payload as GeneratedTestScenario;
   if (scenario.safetyLevel !== "safe" || !scenario.autoExecutable) {
     throw createError({ statusCode: 409, statusMessage: "안전 판정을 받은 읽기 전용 테스트만 개별 실행할 수 있습니다." });
