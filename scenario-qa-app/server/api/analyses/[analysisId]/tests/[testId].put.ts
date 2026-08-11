@@ -2,7 +2,7 @@ import type { GeneratedTestScenario, PageSnapshot } from "../../../../../shared/
 import { getOwnedAnalysis } from "../../../../services/analysis-records.service";
 import { buildEditedScenario, updateGeneratedTestSchema } from "../../../../services/generated-test-editor.service";
 import { getGeneratedTestRow } from "../../../../services/generated-test-record.service";
-import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";
+import { requireUser } from "../../../../services/supabase.service";
 
 export default defineEventHandler(async (event) => {
   const { client } = await requireUser(event);
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const parsed = updateGeneratedTestSchema.safeParse(await readBody(event));
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "테스트 시나리오 입력값을 확인해 주세요." });
 
-  const admin = createServiceSupabaseClient(event);
+  const admin = client;
   const testRow = await getGeneratedTestRow(admin, analysisId, testId);
 
   let snapshotQuery = admin.from("page_snapshots").select("payload").eq("analysis_id", analysisId).order("created_at", { ascending: false }).limit(1);
