@@ -28,7 +28,7 @@ jobs:
         run: npm ci
       - name: Install Chromium
         working-directory: scenario-qa-app
-        run: npx playwright install --with-deps chromium
+        run: PLAYWRIGHT_BROWSERS_PATH=../scenario-test-runner/.playwright-browsers npx playwright install --with-deps chromium
       - name: Verify change
         working-directory: scenario-qa-app
         run: npm run check
