@@ -16,28 +16,10 @@ jobs:
       - name: Apply verified files
         env:
           MIGRATION_B64: Y3JlYXRlIG9yIHJlcGxhY2UgZnVuY3Rpb24gcHVibGljLnNldF9hbmFseXNpc19kaXNwYXRjaF9zdGF0ZSgKICBwX2FuYWx5c2lzX2lkIHV1aWQsCiAgcF9zdGF0dXMgdGV4dCwKICBwX3Byb2Nlc3Nfc3RhZ2UgdGV4dCwKICBwX21lc3NhZ2UgdGV4dCwKICBwX2Vycm9yIGpzb25iCikKcmV0dXJucyB2b2lkCmxhbmd1YWdlIHBscGdzcWwKc2VjdXJpdHkgZGVmaW5lcgpzZXQgc2VhcmNoX3BhdGggPSAnJwphcyAkJApiZWdpbgogIGlmIHBfc3RhdHVzIG5vdCBpbiAoJ2Rpc3BhdGNoaW5nJywgJ2Rpc3BhdGNoZWQnLCAnZGlzcGF0Y2hfZmFpbGVkJykgdGhlbgogICAgcmFpc2UgZXhjZXB0aW9uICdJTlZBTElEX0RJU1BBVENIX1NUQVRVUyc7CiAgZW5kIGlmOwogIGlmIHBfcHJvY2Vzc19zdGFnZSBub3QgaW4gKCdkb2N1bWVudF9hbmFseXNpcycsICdwYWdlX2FuYWx5c2lzJywgJ2ZhaWxlZCcpIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnSU5WQUxJRF9QUk9DRVNTX1NUQUdFJzsKICBlbmQgaWY7CgogIHVwZGF0ZSBwdWJsaWMuYW5hbHlzZXMKICBzZXQgc3RhdHVzID0gcF9zdGF0dXM6OnB1YmxpYy5hbmFseXNpc19zdGF0dXMsCiAgICAgIHByb2Nlc3Nfc3RhZ2UgPSBwX3Byb2Nlc3Nfc3RhZ2UsCiAgICAgIHByb2dyZXNzID0gY2FzZSB3aGVuIHBfc3RhdHVzID0gJ2Rpc3BhdGNoX2ZhaWxlZCcgdGhlbiAxMDAgZWxzZSBwcm9ncmVzcyBlbmQsCiAgICAgIGN1cnJlbnRfbWVzc2FnZSA9IHBfbWVzc2FnZSwKICAgICAgZXJyb3IgPSBwX2Vycm9yLAogICAgICBjb21wbGV0ZWRfYXQgPSBjYXNlIHdoZW4gcF9zdGF0dXMgPSAnZGlzcGF0Y2hfZmFpbGVkJyB0aGVuIG5vdygpIGVsc2UgY29tcGxldGVkX2F0IGVuZAogIHdoZXJlIGlkID0gcF9hbmFseXNpc19pZAogICAgYW5kIHVzZXJfaWQgPSBhdXRoLnVpZCgpCiAgICBhbmQgc3RhdHVzIGluICgncXVldWVkJywgJ2Rpc3BhdGNoaW5nJywgJ2Rpc3BhdGNoZWQnKTsKZW5kOwokJDsKCnJldm9rZSBhbGwgb24gZnVuY3Rpb24gcHVibGljLnNldF9hbmFseXNpc19kaXNwYXRjaF9zdGF0ZSh1dWlkLHRleHQsdGV4dCx0ZXh0LGpzb25iKSBmcm9tIHB1YmxpYzsKZ3JhbnQgZXhlY3V0ZSBvbiBmdW5jdGlvbiBwdWJsaWMuc2V0X2FuYWx5c2lzX2Rpc3BhdGNoX3N0YXRlKHV1aWQsdGV4dCx0ZXh0LHRleHQsanNvbmIpIHRvIGF1dGhlbnRpY2F0ZWQ7Cg==
+          TEST_GZ_B64: H4sIAAAAAAAACqVY247bNhB9L5B/GAgFJANe195cGmy6AYK2eQrSdjd5KgqWpkY2E4rUkpQvSPLvBUldvbItpw9rrynxzJVnZsjzQmkLX0AjTd9ygfd7yeAbZFrlEEmV4k1moldPfuD1iykapvkSp4C7ApmdArfNhg23aKx7nylpLJgHAbc97ETiFj7evUui2U85X2lquZLmp+v59Yv5y/mz+Xy+IFxyy6kgD5QYtsaczsyDiKYQdJjlaOms1GIyhai02cto0shbaSqtuf8OqdeElnaN0nJGLabE0qVAEvBGizeWCvwe6U8J7gqukXgEQiUVe8PPC67kltJYqi2mF8pezL2/K9kNysXyDeoNZ3inLrbea3BNKgCilUCiSylRj/V9pUJKudi/4zm336PBU6IpN0g8SmM+EQ5vrAYaqbA8vzj+L0IMpE+4RnSNNlb6UiuaMmouNd+Lv27lFppvqEXS4I1VwK414r2lq4tTYOEd4Pe7/F9dnv8aH0quMUdpPxZC0YvPwWKAATqgpPSoo3ORm4Jatr631OJbvvsebZ6SjO9IjeT8YpGgLHMyLig1TSfRfVnQJTUIjSAwyErN7T6aQjKB29fw5ckPANwmUUhDA3fv7kFJwA3qPZQG9ZXaSkzB02J/G0CmNCRVFrjnoDL4OwpBRBNNoza76MovuG9iJC3MWtlmISsl846IptEKJerAxGjs4xViLBZu2f/QpWz+dw+IRlMK25PNjSn72pgyz6nmfnGr9OdMqG0NRbXlGWXWRP9MqkqXmAcxmVn1q5KWcpn8S4VFXZlclEvB2ezHL/7nNwiOBK22IHCDovH5v65cAHwLX87nnxELA41AqI4gUJk61xugEqhVOWfwSS3h7s9fDwMwrF+0oaJEk8QP9KpBj6cHPzMqDEaTV8dAmEanjNKgsRCUIdRhqm0Ob7QU8kktT+AVK0LTDTdK78mOMkuEYp+jR05h4X0Ddo1QaJWWQaanZNM64JT9r2/h+QlNXt/C4pSiJKe7kLEglYUl2i2ihIUPzCngsDPFwq57O+d+57U7nh2te5XrUMHreUfO8Tfj9lE8DZuCOytvhloKPYLzx9qAkmLvnawKrHjI+dsic+8s944KjuRb0231dPGrYFAgs45DAmWEyJ7ZWiVUwxyjNgV5KQp0aSr757GGAqv61p/Also+xufSoH5kTydhQxPV8afhK4npFZfe0bEJ3SHUx8QVTFWu1kDBU6em3BFs73T3krvqLXu216QCKWZcoj60anCTU4fwFG69R2YlT5PJuI1F6vmXWvgFpNomE7gCLi3qDRUQL55DzmVp0cSj4IJjcYesDJE7JJbBnjgpS55OjsWzExAPYtaePyuXOzZmaypXAwnR9G9gymWonfoIz3Q6vZ5BoR4E5atCW9Xepp0DmqbDGXrACsdkFCvSERDGlLF7B+pVcz4cuXNGgafOI3YPWSlESyMHSd4eqzW1IF2bAH54AKOUdELWrmgxyzco9uA6ei5X0LYEQ27tTjH9LLfUlgZuIa6A4lAbL0nHSwRxCUn8UGKJaTyFuG7CnODOz/CQUclQ+GYRjcU0nowVdkb9y7WPmUrR6XT38f373+/I+z8+kPsPb+4+/P7baIwj3DBUTBzHvQn9Wj0AgpvfWgb86w2EWS42kFIbutC2zBzhud4sOUAYpaErTxfhbqDKZHeeu1PkgcFnUUO9mlY8P62Sq8v3I+FOH+vzG/uN6Ondg5UqVMLDoDXznHF5xXMqWloMtrrS5VpN1+jrK8NUgWnTizrWlCiGQ9adPYd6x0IJzvaNPOIluBGXId8gqcQf2HoU9HiKnt/bTNVWFZw5UyCu1bqJ4etX4OnNjcWdHYtYoM6UzqGd11GmydjdNHOM3Oba6eQ5DjOi8KRaFacqT5sqNE3rtjsE/8/f3nZHbN/JrMJ80kmrsFiV1+FE6d0R9N2oFUNjwvwPLgC+c5ZNERqBUWVbsJFnHgB33OlWWdwd6VPFSm/NaPyB8jkIeHz2Gy2qM7l1HR+Gt/6Kn9+mi/mzl89/fjEfLSHueTyegsTtrLc2HsowlFRzZQgtCq02vqhVkIPPHvUVVAi1HZ5PHK/TjU/CqrleolBbl6BcO7ICY5V2WVNQuz7WsD2+HzpBVINRJaEyOPJ61G5dhP5Au1dL/wc3qSyfZUqkqCXNMXEfk8nfi3/gFpJqCGt5MnDbIV2eFZRRLtr5vnZJdSt2KZhB28HqXXBdClWQqmNzR913bSd7tUaYs6dt1Tp5GJjMcV/9LlQSPCVZ5Z813a+7j4MlZkpjIHEuV8MZOHAlONzi1ibd3PRYmptq/fDy4AzuiGJ5DuLsmHYioH5YmzrfdT4+GSWXgxNcFQz39x/w2roQmRoAAA=
         run: |
           printf '%s' "$MIGRATION_B64" | base64 -d > scenario-qa-app/supabase/migrations/202608110003_fix_dispatch_state_enum_cast.sql
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("scenario-qa-app/supabase/migration.test.ts")
-          text = path.read_text()
-          const_line = 'const dispatchStateFixSql = readFileSync(new URL("./migrations/202608110003_fix_dispatch_state_enum_cast.sql", import.meta.url), "utf8");'
-          if const_line not in text:
-              anchor = 'const requirementUploadSql = readFileSync(new URL("./migrations/202608110002_authenticated_requirement_upload.sql", import.meta.url), "utf8");'
-              text = text.replace(anchor, anchor + "\n" + const_line)
-          test_block = '''
-
-  it("casts the dispatch status text to the analyses enum before updating", () => {
-    expect(dispatchStateFixSql).toContain("status = p_status::public.analysis_status");
-    expect(dispatchStateFixSql).toContain("user_id = auth.uid()");
-    expect(dispatchStateFixSql).toContain("grant execute on function public.set_analysis_dispatch_state(uuid,text,text,text,jsonb) to authenticated");
-  });'''
-          if 'casts the dispatch status text to the analyses enum' not in text:
-              index = text.rfind("\n});")
-              text = text[:index] + test_block + text[index:]
-          path.write_text(text)
-          PY
+          printf '%s' "$TEST_GZ_B64" | base64 -d | gunzip > scenario-qa-app/supabase/migration.test.ts
           git add scenario-qa-app/supabase/migration.test.ts scenario-qa-app/supabase/migrations/202608110003_fix_dispatch_state_enum_cast.sql
           git config user.name "codex-deploy"
           git config user.email "codex-deploy@users.noreply.github.com"
