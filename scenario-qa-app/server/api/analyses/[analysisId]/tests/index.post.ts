@@ -1,7 +1,7 @@
 import type { PageSnapshot } from "../../../../../shared/types/analysis";
 import { getOwnedAnalysis } from "../../../../services/analysis-records.service";
 import { buildAddedScenario, createGeneratedTestSchema } from "../../../../services/generated-test-editor.service";
-import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";
+import { requireUser } from "../../../../services/supabase.service";
 
 export default defineEventHandler(async (event) => {
   const { client } = await requireUser(event);
@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   if (analysis.process_stage !== "scenario_review") throw createError({ statusCode: 409, statusMessage: "시나리오 검토 단계에서만 테스트를 추가할 수 있습니다." });
   const parsed = createGeneratedTestSchema.safeParse(await readBody(event));
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "테스트 시나리오 입력값을 확인해 주세요." });
-  const admin = createServiceSupabaseClient(event);
+  const admin = client;
   let pageDbId: string | null = null;
   if (parsed.data.pageId) {
     const { data: page } = await admin.from("analysis_pages").select("id").eq("analysis_id", analysisId).eq("source_id", parsed.data.pageId).single();

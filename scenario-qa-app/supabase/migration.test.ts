@@ -12,6 +12,7 @@ const threeStageSql = readFileSync(new URL("./migrations/202608110001_three_stag
 const requirementUploadSql = readFileSync(new URL("./migrations/202608110002_authenticated_requirement_upload.sql", import.meta.url), "utf8");
 const dispatchStateFixSql = readFileSync(new URL("./migrations/202608110003_fix_dispatch_state_enum_cast.sql", import.meta.url), "utf8");
 const generatedTestEditorSql = readFileSync(new URL("./migrations/202608110004_generated_test_editor_permissions.sql", import.meta.url), "utf8");
+const authenticatedScenarioEditorSql = readFileSync(new URL("./migrations/202608110005_authenticated_scenario_editor.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -58,6 +59,12 @@ describe("Supabase migration security", () => {
   it("allows scenario edits to replace only generated test steps", () => {
     expect(generatedTestEditorSql).toContain("grant delete on table public.generated_test_steps to service_role");
     expect(generatedTestEditorSql).not.toContain("public.generated_tests to service_role");
+  });
+  it("uses authenticated ownership policies for scenario changes", () => {
+    expect(authenticatedScenarioEditorSql).toContain("grant insert, update on table public.generated_tests to authenticated");
+    expect(authenticatedScenarioEditorSql).toContain("grant insert, delete on table public.generated_test_steps to authenticated");
+    expect(authenticatedScenarioEditorSql).toContain("grant insert, update on table public.test_runs to authenticated");
+    expect(authenticatedScenarioEditorSql.match(/user_id = auth\.uid\(\)/g)).toHaveLength(8);
   });
   it("broadcasts minimal analysis updates on an owner-scoped private channel", () => {
     expect(broadcastSql).toContain("create policy analysis_owners_receive_updates");
