@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: "분석이 끝난 뒤 개별 테스트를 실행할 수 있습니다." });
   }
 
-  const admin = createServiceSupabaseClient();
+  const admin = createServiceSupabaseClient(event);
   const testRow = await getGeneratedTestRow(admin, analysisId, testId);
   const scenario = testRow.payload as GeneratedTestScenario;
   if (scenario.safetyLevel !== "safe" || !scenario.autoExecutable) {

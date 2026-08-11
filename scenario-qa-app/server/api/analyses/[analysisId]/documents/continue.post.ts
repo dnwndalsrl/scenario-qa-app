@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const analysisId = getRouterParam(event, "analysisId") || "";
   const analysis = await getOwnedAnalysis(client, analysisId);
   if (analysis.process_stage !== "document_failed") throw createError({ statusCode: 409, statusMessage: "문서 분석 실패 상태에서만 문서 없이 계속할 수 있습니다." });
-  const admin = createServiceSupabaseClient();
+  const admin = createServiceSupabaseClient(event);
   await admin.from("requirement_documents").update({ status: "ignored" }).eq("analysis_id", analysisId);
   await admin.from("analyses").update({ status: "dispatching", process_stage: "page_analysis", progress: 2, current_message: "문서 없이 2단계 페이지 분석을 요청하고 있습니다.", error: null, completed_at: null }).eq("id", analysisId);
   try {

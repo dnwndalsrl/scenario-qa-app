@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const analysisId = getRouterParam(event, "analysisId") || "";
   const analysis = await getOwnedAnalysis(client, analysisId);
   if (analysis.process_stage !== "scenario_review") throw createError({ statusCode: 409, statusMessage: "시나리오 검토 단계에서만 전체 테스트를 확정할 수 있습니다." });
-  const admin = createServiceSupabaseClient();
+  const admin = createServiceSupabaseClient(event);
   const { data: rows, error } = await admin.from("generated_tests").select("*").eq("analysis_id", analysisId).eq("safety_level", "safe").eq("auto_executable", true).order("created_at");
   if (error) throw createError({ statusCode: 500, statusMessage: "실행할 시나리오를 조회하지 못했습니다." });
   if (!rows?.length) throw createError({ statusCode: 409, statusMessage: "실행 가능한 안전한 시나리오가 없습니다." });

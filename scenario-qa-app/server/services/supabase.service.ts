@@ -25,8 +25,8 @@ export function createUserSupabaseClient(event: H3Event): SupabaseClient {
   });
 }
 
-export function createServiceSupabaseClient(): SupabaseClient {
-  const config = useRuntimeConfig();
+export function createServiceSupabaseClient(event?: H3Event): SupabaseClient {
+  const config = useRuntimeConfig(event);
   return createClient(
     required("SUPABASE_URL", resolveSupabaseUrl(config)),
     required("SUPABASE_SERVICE_ROLE_KEY", String(config.supabaseServiceRoleKey || "")),
