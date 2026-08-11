@@ -1,6 +1,7 @@
 import type { GeneratedTestScenario, PageSnapshot } from "../../../../../shared/types/analysis";
 import { getOwnedAnalysis } from "../../../../services/analysis-records.service";
 import { buildEditedScenario, updateGeneratedTestSchema } from "../../../../services/generated-test-editor.service";
+import { getGeneratedTestRow } from "../../../../services/generated-test-record.service";
 import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";
 
 export default defineEventHandler(async (event) => {
@@ -16,8 +17,7 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "테스트 시나리오 입력값을 확인해 주세요." });
 
   const admin = createServiceSupabaseClient();
-  const { data: testRow, error: testError } = await admin.from("generated_tests").select("*").eq("analysis_id", analysisId).eq("source_id", testId).single();
-  if (testError || !testRow) throw createError({ statusCode: 404, statusMessage: "테스트 시나리오를 찾을 수 없습니다." });
+  const testRow = await getGeneratedTestRow(admin, analysisId, testId);
 
   let snapshotQuery = admin.from("page_snapshots").select("payload").eq("analysis_id", analysisId).order("created_at", { ascending: false }).limit(1);
   snapshotQuery = testRow.page_id ? snapshotQuery.eq("page_id", testRow.page_id) : snapshotQuery.is("page_id", null);
