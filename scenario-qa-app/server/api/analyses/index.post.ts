@@ -5,13 +5,10 @@ import { requireUser } from "../../services/supabase.service";
 import { RequirementDocumentSaveError, saveRequirementDocument } from "../../services/requirement-document-storage.service";
 
 const requestSchema = z.object({
-  url: z.string().trim().min(1).max(2048),
-  options: z.object({
-    mode: z.enum(["single_page", "site_crawl"]).default("single_page"),
-    maxPages: z.number().int().min(1).max(5).default(3),
-    maxDepth: z.number().int().min(0).max(2).default(1)
-  }).default({ mode: "single_page", maxPages: 3, maxDepth: 1 })
+  url: z.string().trim().min(1).max(2048)
 });
+
+export const FIXED_ANALYSIS_SCOPE = { mode: "single_page", maxPages: 1, maxDepth: 0 } as const;
 
 export default defineEventHandler(async (event) => {
   const contentType = getHeader(event, "content-type") || "";
@@ -34,11 +31,11 @@ export default defineEventHandler(async (event) => {
 
   const { client, user } = await requireUser(event);
   const normalizedUrl = await validatePublicTargetUrl(parsed.data.url);
-  const options = parsed.data.options;
+  const options = FIXED_ANALYSIS_SCOPE;
   const { data, error } = await client.rpc("create_analysis_job", {
     p_target_url: parsed.data.url, p_normalized_url: normalizedUrl, p_mode: options.mode,
-    p_max_pages: options.mode === "single_page" ? 1 : options.maxPages,
-    p_max_depth: options.mode === "single_page" ? 0 : options.maxDepth,
+    p_max_pages: options.maxPages,
+    p_max_depth: options.maxDepth,
     p_auto_run: false, p_retry_of: null
   });
   if (error) throw createError({ statusCode: error.message.includes("LIMIT") ? 429 : 400, statusMessage: error.message, data: { code: error.message } });

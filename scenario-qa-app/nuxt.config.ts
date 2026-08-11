@@ -29,7 +29,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: "Probe QA · URL 기반 AI 웹 QA",
-      meta: [{ name: "description", content: "URL을 등록하면 GitHub Actions 실행기가 안전한 웹 QA 분석을 수행합니다." }]
+      meta: [{ name: "description", content: "URL을 등록하면 페이지를 분석하고 검토 가능한 웹 QA 시나리오를 생성합니다." }]
     }
   }
 });
