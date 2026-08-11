@@ -15,71 +15,27 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           replacements = {
-              Path("scenario-qa-app/server/api/analyses/[analysisId]/tests/[testId].put.ts"): [
-                  ('import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";', 'import { requireUser } from "../../../../services/supabase.service";'),
-                  ('const admin = createServiceSupabaseClient(event);', 'const admin = client;'),
-              ],
-              Path("scenario-qa-app/server/api/analyses/[analysisId]/tests/index.post.ts"): [
-                  ('import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";', 'import { requireUser } from "../../../../services/supabase.service";'),
-                  ('const admin = createServiceSupabaseClient(event);', 'const admin = client;'),
-              ],
-              Path("scenario-qa-app/server/api/analyses/[analysisId]/tests/[testId]/runs.post.ts"): [
-                  ('import { createServiceSupabaseClient, requireUser } from "../../../../../services/supabase.service";', 'import { requireUser } from "../../../../../services/supabase.service";'),
-                  ('const admin = createServiceSupabaseClient(event);', 'const admin = client;'),
-              ],
+              Path("scenario-qa-app/server/api/analyses/[analysisId]/tests/[testId].put.ts"): [('import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";', 'import { requireUser } from "../../../../services/supabase.service";'), ('const admin = createServiceSupabaseClient(event);', 'const admin = client;')],
+              Path("scenario-qa-app/server/api/analyses/[analysisId]/tests/index.post.ts"): [('import { createServiceSupabaseClient, requireUser } from "../../../../services/supabase.service";', 'import { requireUser } from "../../../../services/supabase.service";'), ('const admin = createServiceSupabaseClient(event);', 'const admin = client;')],
+              Path("scenario-qa-app/server/api/analyses/[analysisId]/tests/[testId]/runs.post.ts"): [('import { createServiceSupabaseClient, requireUser } from "../../../../../services/supabase.service";', 'import { requireUser } from "../../../../../services/supabase.service";'), ('const admin = createServiceSupabaseClient(event);', 'const admin = client;')],
           }
           for path, pairs in replacements.items():
               text = path.read_text(encoding="utf-8")
               for old, new in pairs:
-                  if old not in text:
-                      raise SystemExit(f"missing expected text in {path}: {old}")
+                  if old not in text: raise SystemExit("missing expected text in " + str(path))
                   text = text.replace(old, new, 1)
               path.write_text(text, encoding="utf-8")
-
-          migration = Path("scenario-qa-app/supabase/migrations/202608110005_authenticated_scenario_editor.sql")
-          migration.write_text("""-- Scenario changes originate from a logged-in user. Keep these writes on the
--- user's JWT so row-level security enforces ownership.
-grant insert, update on table public.generated_tests to authenticated;
-grant insert, delete on table public.generated_test_steps to authenticated;
-grant insert, update on table public.test_runs to authenticated;
-
-create policy generated_tests_insert_own on public.generated_tests
-  for insert to authenticated with check (user_id = auth.uid());
-create policy generated_tests_update_own on public.generated_tests
-  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-create policy generated_test_steps_insert_own on public.generated_test_steps
-  for insert to authenticated with check (user_id = auth.uid());
-create policy generated_test_steps_delete_own on public.generated_test_steps
-  for delete to authenticated using (user_id = auth.uid());
-
-create policy test_runs_insert_own on public.test_runs
-  for insert to authenticated with check (user_id = auth.uid());
-create policy test_runs_update_own on public.test_runs
-  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-""", encoding="utf-8")
-
           test_path = Path("scenario-qa-app/supabase/migration.test.ts")
           test_text = test_path.read_text(encoding="utf-8")
           anchor = 'const generatedTestEditorSql = readFileSync(new URL("./migrations/202608110004_generated_test_editor_permissions.sql", import.meta.url), "utf8");'
-          test_text = test_text.replace(anchor, anchor + '\nconst authenticatedScenarioEditorSql = readFileSync(new URL("./migrations/202608110005_authenticated_scenario_editor.sql", import.meta.url), "utf8");', 1)
-          block = '''  it("allows scenario edits to replace only generated test steps", () => {
-    expect(generatedTestEditorSql).toContain("grant delete on table public.generated_test_steps to service_role");
-    expect(generatedTestEditorSql).not.toContain("public.generated_tests to service_role");
-  });'''
-          addition = block + '''
-  it("uses authenticated ownership policies for scenario changes", () => {
-    expect(authenticatedScenarioEditorSql).toContain("grant insert, update on table public.generated_tests to authenticated");
-    expect(authenticatedScenarioEditorSql).toContain("grant insert, delete on table public.generated_test_steps to authenticated");
-    expect(authenticatedScenarioEditorSql).toContain("grant insert, update on table public.test_runs to authenticated");
-    expect(authenticatedScenarioEditorSql.match(/user_id = auth\.uid\(\)/g)).toHaveLength(8);
-  });'''
-          if anchor not in test_text or block not in test_text:
-              raise SystemExit("missing migration test anchor")
+          test_text = test_text.replace(anchor, anchor + chr(10) + 'const authenticatedScenarioEditorSql = readFileSync(new URL("./migrations/202608110005_authenticated_scenario_editor.sql", import.meta.url), "utf8");', 1)
+          block = chr(10).join(['  it("allows scenario edits to replace only generated test steps", () => {', '    expect(generatedTestEditorSql).toContain("grant delete on table public.generated_test_steps to service_role");', '    expect(generatedTestEditorSql).not.toContain("public.generated_tests to service_role");', '  });'])
+          addition = block + chr(10) + chr(10).join(['  it("uses authenticated ownership policies for scenario changes", () => {', '    expect(authenticatedScenarioEditorSql).toContain("grant insert, update on table public.generated_tests to authenticated");', '    expect(authenticatedScenarioEditorSql).toContain("grant insert, delete on table public.generated_test_steps to authenticated");', '    expect(authenticatedScenarioEditorSql).toContain("grant insert, update on table public.test_runs to authenticated");', '    expect(authenticatedScenarioEditorSql.match(/user_id = auth\.uid\(\)/g)).toHaveLength(8);', '  });'])
+          if anchor not in test_text or block not in test_text: raise SystemExit("missing migration test anchor")
           test_path.write_text(test_text.replace(block, addition, 1), encoding="utf-8")
           PY
+          printf '%s' 'LS0gU2NlbmFyaW8gY2hhbmdlcyBvcmlnaW5hdGUgZnJvbSBhIGxvZ2dlZC1pbiB1c2VyLiBLZWVwIHRoZXNlIHdyaXRlcyBvbiB0aGUKLS0gdXNlcidzIEpXVCBzbyByb3ctbGV2ZWwgc2VjdXJpdHkgZW5mb3JjZXMgb3duZXJzaGlwLgpncmFudCBpbnNlcnQsIHVwZGF0ZSBvbiB0YWJsZSBwdWJsaWMuZ2VuZXJhdGVkX3Rlc3RzIHRvIGF1dGhlbnRpY2F0ZWQ7CmdyYW50IGluc2VydCwgZGVsZXRlIG9uIHRhYmxlIHB1YmxpYy5nZW5lcmF0ZWRfdGVzdF9zdGVwcyB0byBhdXRoZW50aWNhdGVkOwpncmFudCBpbnNlcnQsIHVwZGF0ZSBvbiB0YWJsZSBwdWJsaWMudGVzdF9ydW5zIHRvIGF1dGhlbnRpY2F0ZWQ7CgpjcmVhdGUgcG9saWN5IGdlbmVyYXRlZF90ZXN0c19pbnNlcnRfb3duIG9uIHB1YmxpYy5nZW5lcmF0ZWRfdGVzdHMKICBmb3IgaW5zZXJ0IHRvIGF1dGhlbnRpY2F0ZWQgd2l0aCBjaGVjayAodXNlcl9pZCA9IGF1dGgudWlkKCkpOwpjcmVhdGUgcG9saWN5IGdlbmVyYXRlZF90ZXN0c191cGRhdGVfb3duIG9uIHB1YmxpYy5nZW5lcmF0ZWRfdGVzdHMKICBmb3IgdXBkYXRlIHRvIGF1dGhlbnRpY2F0ZWQgdXNpbmcgKHVzZXJfaWQgPSBhdXRoLnVpZCgpKSB3aXRoIGNoZWNrICh1c2VyX2lkID0gYXV0aC51aWQoKSk7CgpjcmVhdGUgcG9saWN5IGdlbmVyYXRlZF90ZXN0X3N0ZXBzX2luc2VydF9vd24gb24gcHVibGljLmdlbmVyYXRlZF90ZXN0X3N0ZXBzCiAgZm9yIGluc2VydCB0byBhdXRoZW50aWNhdGVkIHdpdGggY2hlY2sgKHVzZXJfaWQgPSBhdXRoLnVpZCgpKTsKY3JlYXRlIHBvbGljeSBnZW5lcmF0ZWRfdGVzdF9zdGVwc19kZWxldGVfb3duIG9uIHB1YmxpYy5nZW5lcmF0ZWRfdGVzdF9zdGVwcwogIGZvciBkZWxldGUgdG8gYXV0aGVudGljYXRlZCB1c2luZyAodXNlcl9pZCA9IGF1dGgudWlkKCkpOwoKY3JlYXRlIHBvbGljeSB0ZXN0X3J1bnNfaW5zZXJ0X293biBvbiBwdWJsaWMudGVzdF9ydW5zCiAgZm9yIGluc2VydCB0byBhdXRoZW50aWNhdGVkIHdpdGggY2hlY2sgKHVzZXJfaWQgPSBhdXRoLnVpZCgpKTsKY3JlYXRlIHBvbGljeSB0ZXN0X3J1bnNfdXBkYXRlX293biBvbiBwdWJsaWMudGVzdF9ydW5zCiAgZm9yIHVwZGF0ZSB0byBhdXRoZW50aWNhdGVkIHVzaW5nICh1c2VyX2lkID0gYXV0aC51aWQoKSkgd2l0aCBjaGVjayAodXNlcl9pZCA9IGF1dGgudWlkKCkpOwo=' | base64 --decode > scenario-qa-app/supabase/migrations/202608110005_authenticated_scenario_editor.sql
       - name: Install dependencies
         working-directory: scenario-qa-app
         run: npm ci
