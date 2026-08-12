@@ -208,10 +208,10 @@ async function continueWithoutDocument() {
       <span>{{ realtimeWarning }}</span>
       <button type="button" :disabled="busy" @click="refreshDetail">상태 새로고침</button>
     </div>
-    <AnalysisProcessSteps :stage="data.analysis.processStage" :has-document="Boolean(data.documentAnalysis)" />
-    <RequirementDocumentPanel :document="data.documentAnalysis" />
     <AnalysisProgress :analysis="data.analysis" />
     <AnalysisSummary v-if="data.analysis.summary && data.analysis.processStage === 'report_complete'" :summary="data.analysis.summary" />
+    <AnalysisProcessSteps :stage="data.analysis.processStage" :has-document="Boolean(data.documentAnalysis)" />
+    <RequirementDocumentPanel :document="data.documentAnalysis" />
     <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" @changed="refreshDetail" />
     <TestRunResult v-if="data.analysis.options.mode === 'site_crawl' && data.analysis.processStage === 'report_complete'" :runs="data.testRuns" :tests="data.generatedTests" />
     <template v-else-if="data.snapshot && data.pageAnalysis">
