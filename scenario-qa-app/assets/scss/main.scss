@@ -125,7 +125,7 @@ h3 { margin: 0; font-size: 17px; }
 .tag--blocked, .tag--failed, .tag--error { background: #feeceb; color: var(--danger); }
 .test-card { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: white; }
 .test-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.scenario-card, .result-card { padding:22px; border-color:#cfd9e8; border-left:4px solid var(--brand); background:#fff; box-shadow:0 10px 28px rgba(32,49,79,.075); }
+.report-section>.grid>.scenario-card, .report-section>.grid>.result-card { padding:22px; border-color:#cfd9e8; border-left:4px solid var(--brand); background:#fff; box-shadow:0 10px 28px rgba(32,49,79,.075); }
 .scenario-card__identity { display:flex; min-width:0; align-items:flex-start; gap:14px; }
 .scenario-card__identity>div { min-width:0; }
 .scenario-card__number { display:grid; place-items:center; width:38px; height:38px; flex:0 0 auto; border-radius:11px; background:#eef2ff; color:var(--brand-dark); font-size:12px; font-weight:850; letter-spacing:.04em; }
