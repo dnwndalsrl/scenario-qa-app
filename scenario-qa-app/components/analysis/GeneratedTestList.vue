@@ -142,7 +142,7 @@ onBeforeUnmount(stopRefresh);
 </script>
 
 <template>
-  <component :is="compact ? 'div' : 'section'" :class="compact ? 'detail-block' : 'section'">
+  <component :is="compact ? 'div' : 'section'" :class="compact ? 'detail-block' : 'section card report-section report-section--tests'">
     <div class="section-head">
       <div><h2 v-if="!compact">AI가 제안한 테스트</h2><h3 v-else>자동 생성 테스트</h3><p>시나리오를 수정하거나 안전한 테스트 한 건만 다시 실행할 수 있습니다.</p></div>
       <div class="scenario-actions"><span class="tag">{{ tests.length }}개</span><button v-if="reviewMode && editingId !== '__new'" type="button" class="scenario-button" @click="startAdd">새 시나리오 추가</button></div>
