@@ -4,9 +4,9 @@ import { uiLabel } from "~/utils/ui-label";
 defineProps<{ document?: RequirementDocumentAnalysis }>();
 </script>
 <template>
-  <section v-if="document" class="section">
+  <section v-if="document" class="section card report-section report-section--requirements">
     <div class="section-head"><div><h2>1단계 요구사항 분석</h2><p>{{ document.fileName }}</p></div><span class="tag" :class="`tag--${document.status === 'completed' ? 'success' : document.status === 'failed' ? 'failed' : 'warning'}`">{{ uiLabel(document.status) }}</span></div>
-    <div class="card panel">
+    <div>
       <div v-if="document.qaSuitability" class="test-meta">
         <span class="tag">{{ uiLabel(document.documentType || 'unknown') }}</span>
         <span class="tag" :class="`tag--${document.qaSuitability}`">{{ uiLabel(document.qaSuitability) }}</span>

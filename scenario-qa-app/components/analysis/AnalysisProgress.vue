@@ -5,7 +5,7 @@ const props = defineProps<{ analysis: SiteAnalysis }>();
 const currentIndex = computed(() => ANALYSIS_STAGES.findIndex((stage) => stage.status === props.analysis.status));
 </script>
 <template>
-  <section class="progress-card card" aria-live="polite">
+  <section class="progress-card card report-section report-section--progress" aria-live="polite">
     <div class="progress-line"><strong>{{ analysis.currentMessage }}</strong><span>{{ analysis.progress }}%</span></div>
     <div class="progress-track" role="progressbar" aria-label="분석 진행률" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="analysis.progress">
       <span class="progress-bar" :class="{ 'is-failed': analysis.status === 'failed', 'is-success': ['completed','partially_completed'].includes(analysis.status) }" :style="{ width: `${analysis.progress}%` }"></span>
