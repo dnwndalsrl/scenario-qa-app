@@ -14,8 +14,9 @@ const existing = {
 
 describe("generated test editor", () => {
   it("replaces a URL assertion with a viewport assertion and increments the revision", () => {
-    const edited = buildEditedScenario(existing, snapshot, { title: "ABOUT US 섹션 이동", description: "", purpose: "섹션 도달", steps: [{ action: "assert_in_viewport", description: "섹션 표시", elementId: "element-1" }] });
-    expect(edited.steps[0]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { value: "ABOUT US" } });
+    const edited = buildEditedScenario(existing, snapshot, { title: "ABOUT US 섹션 이동", description: "", purpose: "섹션 도달", steps: [{ action: "scroll_into_view", description: "섹션으로 스크롤", elementId: "element-1" }, { action: "assert_in_viewport", description: "섹션 표시", elementId: "element-1" }] });
+    expect(edited.steps[0]).toMatchObject({ action: "scroll_into_view", elementId: "element-1", locator: { value: "ABOUT US" } });
+    expect(edited.steps[1]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { value: "ABOUT US" } });
     expect(edited).toMatchObject({ revision: 2, source: "user", safetyLevel: "safe", autoExecutable: true });
   });
 

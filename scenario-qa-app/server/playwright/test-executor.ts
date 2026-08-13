@@ -84,14 +84,24 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
   if (step.action === "assert_title") { const title = await page.title(); if (step.expected ? !title.includes(step.expected) : !title.trim()) throw new Error(`페이지 제목이 예상과 다릅니다: ${title}`); return; }
   const candidate = step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
   if (!candidate) throw new AppError("TEST_LOCATOR_NOT_FOUND");
-  const locator = resolveLocator(page, candidate); const count = await locator.count();
+  const locator = resolveLocator(page, candidate);
+  try { await locator.first().waitFor({ state: "attached", timeout }); }
+  catch { throw new AppError("TEST_LOCATOR_NOT_FOUND", "테스트 대상 요소가 제한 시간 안에 DOM에 연결되지 않았습니다."); }
+  const count = await locator.count();
   if (count === 0) throw new AppError("TEST_LOCATOR_NOT_FOUND"); if (count !== 1) throw new AppError("TEST_LOCATOR_NOT_UNIQUE");
   switch (step.action) {
+    case "scroll_into_view": await scrollLocatorIntoView(page, locator, timeout); break;
     case "assert_visible": await locator.waitFor({ state: "visible", timeout }); break;
-    case "assert_in_viewport": await waitForInViewport(page, locator, timeout); break;
+    case "assert_in_viewport": await scrollLocatorIntoView(page, locator, timeout); break;
     case "assert_enabled": if (!await locator.isEnabled({ timeout })) throw new Error("요소가 비활성 상태입니다."); break;
     case "assert_text": { const text = await locator.innerText({ timeout }); if (!text.includes(step.expected || "")) throw new Error(`예상 텍스트를 찾지 못했습니다: ${text}`); break; }
-    case "click": await resetScrollTracking(page); await locator.click({ timeout }); break;
+    case "click": {
+      await resetScrollTracking(page);
+      await revealDynamicHeader(page, locator, timeout);
+      try { await locator.click({ timeout }); }
+      catch (error) { throw new AppError("TEST_TARGET_NOT_ACTIONABLE", undefined, 400, error instanceof Error ? error.message : String(error)); }
+      break;
+    }
     case "fill": await locator.fill(step.value || "qa-read-only-check", { timeout }); break;
     case "select": await locator.selectOption(step.value || { index: 0 }, { timeout }); break;
     case "press": await locator.press(step.value || "Tab", { timeout }); break;
@@ -104,7 +114,7 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
 async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep): Promise<string | undefined> {
   if (step.action === "assert_title") return sanitizeText(await page.title(), 500);
   if (step.action === "assert_url" || step.action === "goto") return sanitizeUrl(page.url());
-  if (step.action === "assert_in_viewport") {
+  if (step.action === "assert_in_viewport" || step.action === "scroll_into_view") {
     const candidate = step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
     if (!candidate) return undefined;
     const locator = resolveLocator(page, candidate);
@@ -113,7 +123,8 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
       return { top: Math.round(value.top), bottom: Math.round(value.bottom), viewportHeight: window.innerHeight };
     });
     const scroll = await page.evaluate(() => (window as any).__probeQaScroll || { eventCount: 0, startedY: window.scrollY, lastY: window.scrollY, maxDelta: 0 });
-    return `화면 내 도달(top ${rect.top}px / ${rect.viewportHeight}px) · 스크롤 이벤트 ${scroll.eventCount}회 · 이동 ${Math.round(scroll.lastY - scroll.startedY)}px`;
+    const prefix = step.action === "scroll_into_view" ? "대상으로 스크롤" : "화면 내 도달";
+    return `${prefix}(top ${rect.top}px / ${rect.viewportHeight}px) · 스크롤 이벤트 ${scroll.eventCount}회 · 이동 ${Math.round(scroll.lastY - scroll.startedY)}px`;
   }
   return undefined;
 }
@@ -136,6 +147,45 @@ async function resetScrollTracking(page: Page): Promise<void> {
       current.maxDelta = Math.max(current.maxDelta, Math.abs(position), Math.abs(window.scrollY - current.startedY));
     }, true);
   });
+}
+
+async function scrollLocatorIntoView(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {
+  await resetScrollTracking(page);
+  await locator.waitFor({ state: "visible", timeout });
+  await locator.scrollIntoViewIfNeeded({ timeout });
+  await page.waitForTimeout(100);
+  await waitForInViewport(page, locator, timeout);
+}
+
+async function revealDynamicHeader(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {
+  const started = Date.now();
+  let visibleSamples = 0;
+  while (Date.now() - started < timeout) {
+    const state = await locator.evaluate((element) => {
+      const target = element.getBoundingClientRect();
+      let ancestor: Element | null = element;
+      let fixedAncestor = false;
+      while (ancestor) {
+        const style = getComputedStyle(ancestor);
+        if (style.position === "fixed" || style.position === "sticky") { fixedAncestor = true; break; }
+        ancestor = ancestor.parentElement;
+      }
+      const inViewport = target.bottom > 0 && target.top < window.innerHeight && target.right > 0 && target.left < window.innerWidth;
+      return { fixedAncestor, inViewport, scrollY: window.scrollY };
+    });
+    if (!state.fixedAncestor) return;
+    if (state.inViewport) {
+      visibleSamples += 1;
+      if (visibleSamples >= 2) return;
+      await page.waitForTimeout(100);
+      continue;
+    }
+    visibleSamples = 0;
+    if (state.scrollY <= 0) break;
+    await page.mouse.wheel(0, -Math.min(240, state.scrollY));
+    await page.waitForTimeout(100);
+  }
+  throw new AppError("TEST_DYNAMIC_HEADER_HIDDEN");
 }
 
 async function waitForInViewport(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {

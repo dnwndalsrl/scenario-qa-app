@@ -75,6 +75,50 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[1]?.actual).toContain("스크롤 이벤트");
     expect(run?.stepResults[1]?.currentUrl).toBe(snapshot.finalUrl);
   });
+
+  it("scrolls to a deep element before checking that it is in the viewport", async () => {
+    const target = snapshot.elements.find((element) => element.text === "상품 소개")!;
+    const locator = target.locatorCandidates.find((item) => item.unique)!;
+    const scenario = makeScenario("explicit-scroll", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "scroll_into_view", description: "상품 소개로 스크롤", elementId: target.id, locator },
+      { action: "assert_in_viewport", description: "상품 소개 화면 내 표시 확인", elementId: target.id, locator }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("success");
+    expect(run?.stepResults[1]?.actual).toContain("대상으로 스크롤");
+    expect(run?.stepResults[2]?.actual).toContain("화면 내 도달");
+  });
+
+  it("reveals a fixed header after downward scrolling before clicking its link", async () => {
+    const deepTarget = snapshot.elements.find((element) => element.text === "상품 소개")!;
+    const productLink = snapshot.elements.find((element) => element.testId === "product-link")!;
+    const scenario = makeScenario("dynamic-header", [
+      { action: "scroll_into_view", description: "헤더가 숨겨지는 위치로 스크롤", elementId: deepTarget.id, locator: deepTarget.locatorCandidates.find((item) => item.unique)! },
+      { action: "click", description: "Product 링크 클릭", elementId: productLink.id, locator: productLink.locatorCandidates.find((item) => item.unique)! },
+      { action: "assert_url", description: "상품 목록 이동 확인", expected: "/products" }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.currentUrl).toContain("/products");
+  });
+
+  it("waits for a locator that is attached after DOMContentLoaded", async () => {
+    const scenario = makeScenario("late-locator", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "click", description: "지연 링크 클릭", locator: { strategy: "test_id", value: "late-link", score: 100, unique: true } },
+      { action: "assert_url", description: "지연 링크 이동 확인", expected: "/about" }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("success");
+    expect(run?.stepResults[2]?.currentUrl).toContain("/about");
+  });
 });
 
 function makeScenario(id: string, steps: Array<Partial<GeneratedTestScenario["steps"][number]> & Pick<GeneratedTestScenario["steps"][number], "action" | "description">>): GeneratedTestScenario {

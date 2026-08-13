@@ -3,7 +3,7 @@ import type { GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from ".
 import { enforceSafety } from "../analysis/services/test-safety.service";
 import { createId } from "../utils/id";
 
-const actionSchema = z.enum(["goto", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
+const actionSchema = z.enum(["goto", "scroll_into_view", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
 
 export const updateGeneratedTestSchema = z.object({
   title: z.string().trim().min(1).max(160),

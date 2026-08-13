@@ -33,6 +33,7 @@ let refreshDeadline = 0;
 
 const actions: Array<{ value: GeneratedTestAction; label: string }> = [
   { value: "goto", label: "페이지 접속" },
+  { value: "scroll_into_view", label: "대상 요소로 스크롤" },
   { value: "click", label: "클릭" },
   { value: "assert_in_viewport", label: "화면 안에 표시 확인" },
   { value: "assert_visible", label: "표시 확인" },
