@@ -125,6 +125,9 @@ export interface AnalysisDetail {
 export const ANALYSIS_STAGES: Array<{ status: SiteAnalysisStatus; progress: number; message: string }> = [
   { status: "pending", progress: 2, message: "분석 작업을 준비하고 있습니다." },
   { status: "launching_browser", progress: 5, message: "브라우저를 준비하고 있습니다." },
+  { status: "loading_page", progress: 10, message: "페이지에 접속하고 있습니다." },
+  { status: "collecting_page", progress: 20, message: "페이지 구조를 수집하고 있습니다." },
+  { status: "analyzing_page", progress: 65, message: "AI가 페이지 기능을 분석하고 있습니다." },
   { status: "loading_entry_page", progress: 10, message: "시작 페이지에 접속하고 있습니다." },
   { status: "collecting_entry_page", progress: 15, message: "시작 페이지 구조를 수집하고 있습니다." },
   { status: "discovering_links", progress: 25, message: "안전한 내부 링크를 찾고 있습니다." },
