@@ -33,7 +33,10 @@ let refreshDeadline = 0;
 
 const actions: Array<{ value: GeneratedTestAction; label: string }> = [
   { value: "goto", label: "페이지 접속" },
+  { value: "scroll_to_ratio", label: "페이지 비율로 스크롤" },
+  { value: "scroll_by", label: "현재 위치에서 스크롤" },
   { value: "scroll_into_view", label: "대상 요소로 스크롤" },
+  { value: "wait_for_stable", label: "요소 안정화 대기" },
   { value: "click", label: "클릭" },
   { value: "assert_in_viewport", label: "화면 안에 표시 확인" },
   { value: "assert_visible", label: "표시 확인" },
@@ -47,7 +50,7 @@ const actions: Array<{ value: GeneratedTestAction; label: string }> = [
   { value: "check", label: "체크" },
   { value: "uncheck", label: "체크 해제" }
 ];
-const noElementActions = new Set<GeneratedTestAction>(["goto", "assert_url", "assert_title"]);
+const noElementActions = new Set<GeneratedTestAction>(["goto", "scroll_to_ratio", "scroll_by", "assert_url", "assert_title"]);
 
 function elementLabel(id: string) {
   const element = props.snapshot.elements.find((item) => item.id === id);
@@ -57,6 +60,12 @@ function needsElement(action: GeneratedTestAction) { return !noElementActions.ha
 function latestRun(testId: string) { return [...props.runs].reverse().find((run) => run.scenarioId === testId); }
 function runIsActive(testId: string) { return ["pending", "running"].includes(latestRun(testId)?.status || ""); }
 function actionLabel(action: GeneratedTestAction) { return actions.find((item) => item.value === action)?.label || action; }
+function valueLabel(action: GeneratedTestAction) {
+  if (action === "scroll_to_ratio") return "스크롤 비율(0~100)";
+  if (action === "scroll_by") return "이동 픽셀(위쪽은 음수)";
+  if (action === "wait_for_stable") return "안정 유지 시간(ms, 선택)";
+  return ["fill", "select", "press"].includes(action) ? "입력값" : "";
+}
 function defaultElementId() {
   return props.snapshot.elements.find((element) => element.locatorCandidates.some((candidate) => candidate.unique))?.id;
 }
@@ -151,7 +160,7 @@ onBeforeUnmount(stopRefresh);
     <div v-if="feedback" :class="feedbackError ? 'error-box' : 'notice'">{{ feedback }}</div>
     <p v-if="!tests.length && editingId !== '__new'" class="muted">생성된 테스트가 없습니다.</p>
     <div v-if="tests.length || editingId === '__new'" class="grid">
-      <article v-if="editingId === '__new'" class="test-card"><form class="scenario-editor" @submit.prevent="save('__new')"><h3>사용자 시나리오 추가</h3><label>제목<input v-model="drafts.__new!.title" required maxlength="160"></label><label>설명<textarea v-model="drafts.__new!.description" maxlength="500" rows="2" /></label><label>목적<textarea v-model="drafts.__new!.purpose" maxlength="500" rows="2" /></label><fieldset v-for="(step,index) in drafts.__new!.steps" :key="index" class="scenario-step"><legend>{{ index+1 }}단계</legend><label>동작<select v-model="step.action" @change="onActionChanged(step)"><option v-for="action in actions" :key="action.value" :value="action.value">{{ action.label }}</option></select></label><label v-if="needsElement(step.action)">대상 요소<select v-model="step.elementId" required><option value="" disabled>요소를 선택하세요</option><option v-for="element in snapshot.elements" :key="element.id" :value="element.id">{{ elementLabel(element.id) }}</option></select></label><label>설명<input v-model="step.description" required maxlength="300"></label><label v-if="['fill','select','press'].includes(step.action)">입력값<input v-model="step.value" maxlength="500"></label><label v-if="['assert_url','assert_title','assert_text'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500"></label><button type="button" class="scenario-button" :disabled="drafts.__new!.steps.length === 1" @click="removeStep('__new',index)">단계 삭제</button></fieldset><div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep('__new')">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" @click="cancelEdit">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === '__new'">{{ busyId === '__new' ? '저장 중…' : '추가' }}</button></div></form></article>
+      <article v-if="editingId === '__new'" class="test-card"><form class="scenario-editor" @submit.prevent="save('__new')"><h3>사용자 시나리오 추가</h3><label>제목<input v-model="drafts.__new!.title" required maxlength="160"></label><label>설명<textarea v-model="drafts.__new!.description" maxlength="500" rows="2" /></label><label>목적<textarea v-model="drafts.__new!.purpose" maxlength="500" rows="2" /></label><fieldset v-for="(step,index) in drafts.__new!.steps" :key="index" class="scenario-step"><legend>{{ index+1 }}단계</legend><label>동작<select v-model="step.action" @change="onActionChanged(step)"><option v-for="action in actions" :key="action.value" :value="action.value">{{ action.label }}</option></select></label><label v-if="needsElement(step.action)">대상 요소<select v-model="step.elementId" required><option value="" disabled>요소를 선택하세요</option><option v-for="element in snapshot.elements" :key="element.id" :value="element.id">{{ elementLabel(element.id) }}</option></select></label><label>설명<input v-model="step.description" required maxlength="300"></label><label v-if="valueLabel(step.action)">{{ valueLabel(step.action) }}<input v-model="step.value" maxlength="500"></label><label v-if="['assert_url','assert_title','assert_text'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500"></label><button type="button" class="scenario-button" :disabled="drafts.__new!.steps.length === 1" @click="removeStep('__new',index)">단계 삭제</button></fieldset><div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep('__new')">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" @click="cancelEdit">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === '__new'">{{ busyId === '__new' ? '저장 중…' : '추가' }}</button></div></form></article>
       <article v-for="(test, testIndex) in tests" :key="test.id" class="test-card scenario-card">
         <template v-if="editingId !== test.id">
           <div class="test-card__head"><div class="scenario-card__identity"><span class="scenario-card__number">{{ String(testIndex + 1).padStart(2, '0') }}</span><div><h3>{{ test.title }}</h3><p class="muted">{{ test.purpose }}</p></div></div><span class="tag" :class="`tag--${test.safetyLevel}`">{{ uiLabel(test.safetyLevel) }}</span></div>
@@ -172,7 +181,7 @@ onBeforeUnmount(stopRefresh);
             <label>동작<select v-model="step.action" @change="onActionChanged(step)"><option v-for="action in actions" :key="action.value" :value="action.value">{{ action.label }}</option></select></label>
             <label v-if="needsElement(step.action)">대상 요소<select v-model="step.elementId" required><option value="" disabled>요소를 선택하세요</option><option v-for="element in snapshot.elements" :key="element.id" :value="element.id">{{ elementLabel(element.id) }}</option></select></label>
             <label>설명<input v-model="step.description" required maxlength="300"></label>
-            <label v-if="['fill','select','press'].includes(step.action)">입력값<input v-model="step.value" maxlength="500"></label>
+            <label v-if="valueLabel(step.action)">{{ valueLabel(step.action) }}<input v-model="step.value" maxlength="500"></label>
             <label v-if="['assert_url','assert_title','assert_text'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500"></label>
             <button type="button" class="scenario-button" :disabled="drafts[test.id]!.steps.length === 1" @click="removeStep(test.id, index)">단계 삭제</button>
           </fieldset>

@@ -34,6 +34,10 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       const element = step.elementId ? elements.get(step.elementId) : undefined;
       if (step.elementId && !element) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Unknown step element id");
       if (step.locator && (!element || !element.locatorCandidates.some((candidate) => candidate.strategy === step.locator!.strategy && candidate.value === step.locator!.value && candidate.unique))) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not unique");
+      const numericValue = Number(step.value);
+      if (step.action === "scroll_to_ratio" && (!step.value?.trim() || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 100)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll ratio");
+      if (step.action === "scroll_by" && (!step.value?.trim() || !Number.isFinite(numericValue) || numericValue < -10000 || numericValue > 10000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll distance");
+      if (step.action === "wait_for_stable" && (!element || step.value?.trim() && (!Number.isFinite(numericValue) || numericValue < 100 || numericValue > 5000))) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid stability wait");
       return { ...step, elementId: step.elementId ?? undefined, locator: step.locator ?? undefined, value: step.value ?? undefined, expected: step.expected ?? undefined, timeoutMs: step.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(step.evidence || []), ...(step.elementId ? [`근거 요소: ${step.elementId}`] : [])])] };
     });
     return enforceSafety({ ...scenario, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });

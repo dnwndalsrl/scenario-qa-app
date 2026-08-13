@@ -83,11 +83,26 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
 async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, defaultTimeout: number): Promise<LocatorCandidate | undefined> {
   const timeout = step.timeoutMs ?? defaultTimeout;
   if (step.action === "goto") { await page.goto(snapshot.finalUrl, { waitUntil: "domcontentloaded", timeout }); return undefined; }
+  if (step.action === "scroll_to_ratio") {
+    const ratio = stepNumber(step, "스크롤 비율", 0, 100);
+    await resetScrollTracking(page);
+    await page.evaluate((value) => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight) * value / 100), ratio);
+    await waitForPageScrollStable(page, timeout);
+    return undefined;
+  }
+  if (step.action === "scroll_by") {
+    const pixels = stepNumber(step, "스크롤 이동 픽셀", -10000, 10000);
+    await resetScrollTracking(page);
+    await page.evaluate((value) => window.scrollBy(0, value), pixels);
+    await waitForPageScrollStable(page, timeout);
+    return undefined;
+  }
   if (step.action === "assert_url") { if (!page.url().includes(step.expected || snapshot.finalUrl)) throw new Error(`예상 URL과 다릅니다: ${page.url()}`); return undefined; }
   if (step.action === "assert_title") { const title = await page.title(); if (step.expected ? !title.includes(step.expected) : !title.trim()) throw new Error(`페이지 제목이 예상과 다릅니다: ${title}`); return undefined; }
   const { locator, candidate } = await resolveStepLocator(page, snapshot, step, timeout);
   switch (step.action) {
     case "scroll_into_view": await scrollLocatorIntoView(page, locator, timeout); break;
+    case "wait_for_stable": await waitForElementStable(page, locator, step.value, timeout); break;
     case "assert_visible": await locator.waitFor({ state: "visible", timeout }); break;
     case "assert_in_viewport": await locator.waitFor({ state: "visible", timeout }); await waitForInViewport(page, locator, timeout); break;
     case "assert_enabled": if (!await locator.isEnabled({ timeout })) throw new Error("요소가 비활성 상태입니다."); break;
@@ -112,6 +127,16 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
 async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, locatorUsed?: LocatorCandidate): Promise<string | undefined> {
   if (step.action === "assert_title") return sanitizeText(await page.title(), 500);
   if (step.action === "assert_url" || step.action === "goto") return sanitizeUrl(page.url());
+  if (step.action === "scroll_to_ratio" || step.action === "scroll_by") {
+    const state = await page.evaluate(() => ({ scrollY: Math.round(window.scrollY), maxScroll: Math.max(0, document.documentElement.scrollHeight - window.innerHeight), events: (window as any).__probeQaScroll?.eventCount || 0 }));
+    const ratio = state.maxScroll ? Math.round(state.scrollY / state.maxScroll * 100) : 0;
+    return `스크롤 위치 ${state.scrollY}px (${ratio}%) · 스크롤 이벤트 ${state.events}회`;
+  }
+  if (step.action === "wait_for_stable") {
+    const candidate = locatorUsed ?? step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
+    if (!candidate) return undefined;
+    return `안정화된 값: ${sanitizeText(await resolveLocator(page, candidate).innerText(), 500)}`;
+  }
   if (step.action === "assert_in_viewport" || step.action === "scroll_into_view") {
     const candidate = locatorUsed ?? step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
     if (!candidate) return undefined;
@@ -128,6 +153,12 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
 }
 function baseStep(step: GeneratedTestStep, status: AutomatedStepResult["status"], errorMessage?: string): AutomatedStepResult { return { stepId: step.id, order: step.order, action: step.action, description: step.description, status, errorMessage }; }
 function isAssertion(step: GeneratedTestStep) { return step.action.startsWith("assert_"); }
+
+function stepNumber(step: GeneratedTestStep, label: string, min: number, max: number): number {
+  const value = Number(step.value);
+  if (!step.value?.trim() || !Number.isFinite(value) || value < min || value > max) throw new AppError("TEST_EXECUTION_FAILED", `${label}은(는) ${min}~${max} 사이 숫자여야 합니다.`);
+  return value;
+}
 
 async function resolveStepLocator(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, timeout: number) {
   const element = step.elementId ? snapshot.elements.find((item) => item.id === step.elementId) : undefined;
@@ -188,6 +219,39 @@ async function scrollLocatorIntoView(page: Page, locator: import("playwright").L
   await locator.scrollIntoViewIfNeeded({ timeout });
   await page.waitForTimeout(100);
   await waitForInViewport(page, locator, timeout);
+}
+
+async function waitForPageScrollStable(page: Page, timeout: number): Promise<void> {
+  const started = Date.now();
+  let previous = "";
+  let stableSamples = 0;
+  while (Date.now() - started < timeout) {
+    const current = await page.evaluate(() => `${Math.round(window.scrollY)}:${document.documentElement.scrollHeight}`);
+    stableSamples = current === previous ? stableSamples + 1 : 0;
+    if (stableSamples >= 2) return;
+    previous = current;
+    await page.waitForTimeout(75);
+  }
+  throw new AppError("TEST_EXECUTION_TIMEOUT", "스크롤 위치가 제한 시간 안에 안정되지 않았습니다.");
+}
+
+async function waitForElementStable(page: Page, locator: import("playwright").Locator, value: string | undefined, timeout: number): Promise<void> {
+  const stableMs = value?.trim() ? Number(value) : 300;
+  if (!Number.isFinite(stableMs) || stableMs < 100 || stableMs > 5000) throw new AppError("TEST_EXECUTION_FAILED", "안정 유지 시간은 100~5000ms 사이 숫자여야 합니다.");
+  await locator.waitFor({ state: "visible", timeout });
+  const started = Date.now();
+  let previous = "";
+  let stableSince = Date.now();
+  while (Date.now() - started < timeout) {
+    const current = await locator.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return JSON.stringify({ text: element.textContent?.trim(), top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width), height: Math.round(rect.height) });
+    });
+    if (current !== previous) { previous = current; stableSince = Date.now(); }
+    else if (Date.now() - stableSince >= stableMs) return;
+    await page.waitForTimeout(75);
+  }
+  throw new AppError("TEST_EXECUTION_TIMEOUT", "대상 요소의 값과 위치가 제한 시간 안에 안정되지 않았습니다.");
 }
 
 async function revealDynamicHeader(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {

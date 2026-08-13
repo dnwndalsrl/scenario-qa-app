@@ -3,7 +3,7 @@ import type { GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from ".
 import { enforceSafety } from "../analysis/services/test-safety.service";
 import { createId } from "../utils/id";
 
-const actionSchema = z.enum(["goto", "scroll_into_view", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
+const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
 
 export const updateGeneratedTestSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -23,12 +23,13 @@ export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({ page
 export type UpdateGeneratedTestInput = z.infer<typeof updateGeneratedTestSchema>;
 export type CreateGeneratedTestInput = z.infer<typeof createGeneratedTestSchema>;
 
-const noElementActions = new Set<GeneratedTestAction>(["goto", "assert_url", "assert_title"]);
+const noElementActions = new Set<GeneratedTestAction>(["goto", "scroll_to_ratio", "scroll_by", "assert_url", "assert_title"]);
 
 export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: PageSnapshot, input: UpdateGeneratedTestInput): GeneratedTestScenario {
   const elements = new Map(snapshot.elements.map((element) => [element.id, element]));
   const steps = input.steps.map((step, index) => {
     const needsElement = !noElementActions.has(step.action);
+    validateDynamicStepValue(step, index);
     const element = step.elementId ? elements.get(step.elementId) : undefined;
     if (needsElement && !element) throw new Error(`단계 ${index + 1}의 대상 요소를 선택해 주세요.`);
     const locator = element?.locatorCandidates.find((candidate) => candidate.unique);
@@ -46,6 +47,13 @@ export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: P
     safetyLevel: "safe", autoExecutable: true,
     revision: existing.revision === 0 ? 1 : (existing.revision || 1) + 1, source: "user", editedAt: new Date().toISOString()
   });
+}
+
+function validateDynamicStepValue(step: UpdateGeneratedTestInput["steps"][number], index: number) {
+  const value = Number(step.value);
+  if (step.action === "scroll_to_ratio" && (!step.value?.trim() || !Number.isFinite(value) || value < 0 || value > 100)) throw new Error(`단계 ${index + 1}의 스크롤 비율은 0~100 사이 숫자여야 합니다.`);
+  if (step.action === "scroll_by" && (!step.value?.trim() || !Number.isFinite(value) || value < -10000 || value > 10000)) throw new Error(`단계 ${index + 1}의 스크롤 이동값은 -10000~10000 사이 숫자여야 합니다.`);
+  if (step.action === "wait_for_stable" && step.value?.trim() && (!Number.isFinite(value) || value < 100 || value > 5000)) throw new Error(`단계 ${index + 1}의 안정 유지 시간은 100~5000ms 사이 숫자여야 합니다.`);
 }
 
 export function buildAddedScenario(analysisId: string, snapshot: PageSnapshot, input: CreateGeneratedTestInput): GeneratedTestScenario {

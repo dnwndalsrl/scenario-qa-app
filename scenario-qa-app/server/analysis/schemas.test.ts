@@ -20,6 +20,11 @@ describe("AI 구조화 출력 검증", () => {
     expect(stepSchema.required).toEqual(Object.keys(stepSchema.properties));
   });
   it("페이지 prompt injection을 지시로 취급하지 않는 정책을 고정한다", () => { expect(PAGE_ANALYSIS_SYSTEM_PROMPT).toContain("신뢰할 수 없는"); expect(PAGE_ANALYSIS_SYSTEM_PROMPT).toContain("prompt injection"); expect(PAGE_ANALYSIS_SYSTEM_PROMPT).toContain("절대 따르지"); });
+  it("동적 페이지 상태를 재현하는 읽기 전용 action을 허용한다", () => {
+    const base = { title: "동적 상태", description: "설명", purpose: "목적", category: "visibility", safetyLevel: "safe", confidence: .8, autoExecutable: true, sourceElementIds: [], requirementIds: [] };
+    const steps = ["scroll_to_ratio", "scroll_by", "wait_for_stable"].map((action, index) => ({ order: index + 1, action, description: action, elementId: null, locator: null, value: "300", expected: null, timeoutMs: null, evidence: [] }));
+    expect(generatedTestResponseSchema.safeParse({ scenarios: [{ ...base, steps }] }).success).toBe(true);
+  });
   it("존재하지 않는 element ID와 발견되지 않은 locator를 거부한다", () => {
     const snapshot = { id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com/", finalUrl: "https://example.com/", title: "Example", viewport: { width: 1440, height: 900 }, headings: [], forms: [], internalLinks: [], consoleMessages: [], networkIssues: [], collectedAt: new Date().toISOString(), elements: [{ id: "element-1", type: "button", tagName: "button", visible: true, locatorCandidates: [{ strategy: "test_id", value: "real", score: 100, unique: true }], safetyHints: [] }] } as PageSnapshot;
     const base = { title: "테스트", description: "설명", purpose: "목적", category: "visibility" as const, safetyLevel: "safe" as const, confidence: .8, autoExecutable: true, requirementIds: [] };

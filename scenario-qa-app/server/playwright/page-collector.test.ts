@@ -159,10 +159,11 @@ describe("Playwright 페이지 수집과 실행", () => {
   });
 
   it("reveals a fixed header after downward scrolling before clicking its link", async () => {
-    const deepTarget = snapshot.elements.find((element) => element.text === "상품 소개")!;
     const productLink = snapshot.elements.find((element) => element.testId === "product-link")!;
     const scenario = makeScenario("dynamic-header", [
-      { action: "scroll_into_view", description: "헤더가 숨겨지는 위치로 스크롤", elementId: deepTarget.id, locator: deepTarget.locatorCandidates.find((item) => item.unique)! },
+      { action: "scroll_to_ratio", description: "헤더가 숨겨지는 위치로 스크롤", value: "75" },
+      { action: "scroll_by", description: "헤더를 다시 표시하도록 위로 스크롤", value: "-240" },
+      { action: "wait_for_stable", description: "동적 헤더 위치 안정화", elementId: productLink.id, locator: productLink.locatorCandidates.find((item) => item.unique)!, value: "150" },
       { action: "click", description: "Product 링크 클릭", elementId: productLink.id, locator: productLink.locatorCandidates.find((item) => item.unique)! },
       { action: "assert_url", description: "상품 목록 이동 확인", expected: "/products" }
     ]);
@@ -170,7 +171,27 @@ describe("Playwright 페이지 수집과 실행", () => {
     const [run] = await executeGeneratedTests(snapshot, [scenario]);
 
     expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
-    expect(run?.stepResults[2]?.currentUrl).toContain("/products");
+    expect(run?.stepResults[0]?.actual).toContain("스크롤 위치");
+    expect(run?.stepResults[1]?.actual).toContain("스크롤 이벤트");
+    expect(run?.stepResults[4]?.currentUrl).toContain("/products");
+  });
+
+  it("reproduces a lazy-loaded counter state and waits for its final value", async () => {
+    const counter = snapshot.elements.find((element) => element.testId === "counter-value")!;
+    const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading")!;
+    const counterLocator = counter.locatorCandidates.find((item) => item.unique)!;
+    const scenario = makeScenario("lazy-counter", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "scroll_to_ratio", description: "지연 콘텐츠가 생성되는 상태 재현", value: "100" },
+      { action: "wait_for_stable", description: "카운터 애니메이션 종료 대기", elementId: counter.id, locator: counterLocator, value: "300" },
+      { action: "assert_text", description: "최종 카운터 값 확인", elementId: counter.id, locator: counterLocator, expected: "32000" },
+      { action: "assert_visible", description: "지연 로딩 제목 확인", elementId: lazyHeading.id, locator: lazyHeading.locatorCandidates.find((item) => item.unique)! }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.actual).toContain("32000");
   });
 
   it("waits for a locator that is attached after DOMContentLoaded", async () => {

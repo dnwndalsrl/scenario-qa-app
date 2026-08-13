@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { GeneratedTestScenario, TestDeduplicationResult } from "../../../shared/types/analysis";
 export function testFingerprint(test: GeneratedTestScenario): string {
-  const normalized = { pageId: test.pageId || "site", category: test.category, purpose: test.purpose.toLowerCase().replace(/\s+/g, " ").trim(), sources: [...test.sourceElementIds].sort(), steps: test.steps.map((step) => ({ action: step.action, elementId: step.elementId, locator: step.locator ? `${step.locator.strategy}:${step.locator.value}` : undefined, expected: step.expected?.trim().toLowerCase() })) };
+  const normalized = { pageId: test.pageId || "site", category: test.category, purpose: test.purpose.toLowerCase().replace(/\s+/g, " ").trim(), sources: [...test.sourceElementIds].sort(), steps: test.steps.map((step) => ({ action: step.action, elementId: step.elementId, locator: step.locator ? `${step.locator.strategy}:${step.locator.value}` : undefined, value: step.value?.trim().toLowerCase(), expected: step.expected?.trim().toLowerCase() })) };
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 export function deduplicateTests(tests: GeneratedTestScenario[]): { tests: GeneratedTestScenario[]; result: TestDeduplicationResult } {
