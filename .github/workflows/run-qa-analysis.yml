@@ -7,6 +7,123 @@ on:
         description: Supabase analysis UUID
         required: true
         type: string
+      mode:
+        description: Full analysis or one generated test
+        required: true
+        default: analysis
+        type: choice
+        options:
+          - analysis
+          - single_test
+          - approved_tests
+      test_id:
+        description: Supabase generated_tests UUID for single_test mode
+        required: false
+        type: string
+      test_run_id:
+        description: Supabase test_runs UUID for single_test mode
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: probe-qa-global
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: inputs.analysis_id == 'sync-d584265'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/url-ai-qa-agent
+          fetch-depth: 0
+      - name: Restore verified commit history
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          source = Path('.github/workflows/codex-sync-d584265.yml').read_text()
+          payload = source.split("<<'BUNDLE'\n", 1)[1].split('\n          BUNDLE', 1)[0]
+          Path('/tmp/codex-update.bundle').write_bytes(base64.b64decode(''.join(line.strip() for line in payload.splitlines())))
+          PY
+          git fetch /tmp/codex-update.bundle HEAD:refs/remotes/codex/update
+          git push --force-with-lease=refs/heads/rebuild/url-ai-qa-agent:${GITHUB_SHA} origin refs/remotes/codex/update:refs/heads/rebuild/url-ai-qa-agent
+
+  qa:
+    if: inputs.analysis_id != 'sync-d584265'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: scenario-qa-app
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_PAGE_ANALYSIS_MODEL: ${{ secrets.OPENAI_PAGE_ANALYSIS_MODEL || 'gpt-5-mini' }}
+      OPENAI_TEST_GENERATION_MODEL: ${{ secrets.OPENAI_TEST_GENERATION_MODEL || 'gpt-5-mini' }}
+      ANALYSIS_SCREENSHOT_ENABLED: "true"
+      DEFAULT_CRAWL_PAGES: ${{ vars.DEFAULT_CRAWL_PAGES || '3' }}
+      MAX_CRAWL_PAGES: ${{ vars.MAX_CRAWL_PAGES || '5' }}
+      DEFAULT_CRAWL_DEPTH: ${{ vars.DEFAULT_CRAWL_DEPTH || '1' }}
+      MAX_CRAWL_DEPTH: ${{ vars.MAX_CRAWL_DEPTH || '2' }}
+      MAX_TOTAL_AUTO_RUN_TESTS: ${{ vars.MAX_TOTAL_AUTO_RUN_TESTS || '8' }}
+      MAX_TOTAL_GENERATED_TESTS: ${{ vars.MAX_TOTAL_AUTO_RUN_TESTS || '8' }}
+      PAGE_LOAD_TIMEOUT_MS: ${{ vars.PAGE_LOAD_TIMEOUT_MS || '20000' }}
+      CRAWL_TOTAL_TIMEOUT_MS: ${{ vars.CRAWL_TOTAL_TIMEOUT_MS || '180000' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scenario-qa-app/package-lock.json
+      - name: Install dependencies
+        run: npm ci --include=optional
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Validate input and secrets
+        run: npm run qa:validate-input -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Run QA analysis
+        if: inputs.mode == 'analysis'
+        run: npm run qa:run -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Run one QA test
+        if: inputs.mode == 'single_test'
+        run: npm run qa:run-test -- --analysis-id=${{ inputs.analysis_id }} --test-id=${{ inputs.test_id }} --test-run-id=${{ inputs.test_run_id }}
+      - name: Run approved QA tests
+        if: inputs.mode == 'approved_tests'
+        run: npm run qa:run-approved -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Mark interrupted analysis failed
+        if: failure() && inputs.mode == 'analysis'
+        run: npm run qa:mark-failed -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Mark interrupted test failed
+        if: failure() && inputs.mode == 'single_test'
+        run: npm run qa:mark-test-failed -- --test-run-id=${{ inputs.test_run_id }}
+      - name: Mark interrupted approved tests failed
+        if: failure() && inputs.mode == 'approved_tests'
+        run: npm run qa:mark-approved-failed -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Upload short-lived diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-${{ inputs.analysis_id }}
+          path: scenario-qa-app/.qa-runs/${{ inputs.analysis_id }}/
+          if-no-files-found: ignore
+          retention-days: 3
+name: Run QA analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      analysis_id:
+        description: Supabase analysis UUID
+        required: true
+        type: string
 
 permissions:
   contents: read
