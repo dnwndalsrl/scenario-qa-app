@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import type { CapturedConsoleMessage, CapturedNetworkIssue, DiscoveredElement, DiscoveredElementType, PageSnapshot } from "../../shared/types/analysis";
+import type { CapturedConsoleMessage, CapturedNetworkIssue, DiscoveredElement, DiscoveredElementType, PageObservationState, PageSnapshot, PageStateObservation } from "../../shared/types/analysis";
 import { AppError } from "../../shared/errors";
 import { getAnalysisConfig } from "../config";
 import { sanitizeText, sanitizeUrl } from "../security/sensitive-data";
@@ -14,7 +14,9 @@ interface RawElement {
   href?: string; inputType?: string; enabled?: boolean; required?: boolean; readonly?: boolean; id?: string; classes?: string[];
   headingLevel?: number; formKey?: string; method?: string; action?: string; alt?: string; noFollow?: boolean; download?: boolean;
   region?: "header" | "main" | "footer" | "other";
+  domPath?: string; inViewport?: boolean;
 }
+interface ObservedRawElement extends RawElement { observedStates: PageObservationState[]; inViewportStates: PageObservationState[]; }
 
 const RISK_WORDS = /삭제|탈퇴|결제|주문|구매|환불|승인|발송|전송|제출|등록|수정|저장|비밀번호\s*변경|권한\s*변경|delete|remove|purchase|payment|checkout|refund|submit|save|update|send/i;
 
@@ -89,7 +91,8 @@ async function collectPageInContext(context: BrowserContext, analysisId: string,
       language: document.documentElement.lang || "",
       canonicalUrl: document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href || ""
     }));
-    const rawElements = await collectRawElements(page, config.maxDiscoveredElements, config.maxTotalVisibleTextLength);
+    const observed = await collectPageStates(page, config.maxDiscoveredElements, config.maxTotalVisibleTextLength);
+    const rawElements = observed.elements;
     const elements: DiscoveredElement[] = [];
     for (let index = 0; index < rawElements.length; index += 1) {
       const raw = rawElements[index]!;
@@ -99,7 +102,8 @@ async function collectPageInContext(context: BrowserContext, analysisId: string,
         id: `element-${index + 1}`, type: elementType(raw), tagName: raw.tagName, role: raw.role, accessibleName: raw.accessibleName,
         label: raw.label, text: raw.text, placeholder: raw.placeholder, testId: raw.testId, href: raw.href ? sanitizeUrl(raw.href) : undefined,
         inputType: raw.inputType, visible: true, enabled: raw.enabled, required: raw.required, readonly: raw.readonly,
-        locatorCandidates: candidates, safetyHints: RISK_WORDS.test(riskSource) ? ["상태 변경 가능성이 있는 문구가 발견됨"] : []
+        locatorCandidates: candidates, safetyHints: RISK_WORDS.test(riskSource) ? ["상태 변경 가능성이 있는 문구가 발견됨"] : [],
+        observedStates: raw.observedStates, inViewportStates: raw.inViewportStates
       });
     }
     const headings = rawElements.map((raw, index) => raw.headingLevel ? { level: raw.headingLevel, text: raw.text || raw.accessibleName || "", elementId: `element-${index + 1}` } : undefined).filter((value): value is NonNullable<typeof value> => Boolean(value));
@@ -117,12 +121,40 @@ async function collectPageInContext(context: BrowserContext, analysisId: string,
     return {
       id: createId("snapshot"), analysisId, pageId: options.pageId, requestedUrl: sanitizeUrl(requestedUrl), finalUrl: sanitizeUrl(finalUrl), canonicalUrl: metadata.canonicalUrl ? sanitizeUrl(metadata.canonicalUrl) : undefined, title: sanitizeText(metadata.title, 500),
       description: sanitizeText(metadata.description, 500), language: sanitizeText(metadata.language, 30), httpStatus: mainStatus, contentType: mainContentType, viewport: page.viewportSize() || { width: 1440, height: 900 }, headings, elements, forms, internalLinks,
-      consoleMessages: consoleMessages.slice(0, 100), networkIssues: deduplicateNetwork(networkIssues).slice(0, 100), screenshotArtifactId, collectedAt: new Date().toISOString()
+      consoleMessages: consoleMessages.slice(0, 100), networkIssues: deduplicateNetwork(networkIssues).slice(0, 100), stateObservations: observed.states, screenshotArtifactId, collectedAt: new Date().toISOString()
     };
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("ANALYSIS_PAGE_COLLECTION_FAILED", undefined, 500, error instanceof Error ? error.message : String(error));
   } finally { await page.close().catch(() => undefined); }
+}
+
+async function collectPageStates(page: Page, maxElements: number, maxTotalText: number): Promise<{ elements: ObservedRawElement[]; states: PageStateObservation[] }> {
+  const plan: Array<{ state: PageObservationState; ratio: number }> = [
+    { state: "initial", ratio: 0 }, { state: "scroll_25", ratio: .25 }, { state: "scroll_50", ratio: .5 },
+    { state: "scroll_75", ratio: .75 }, { state: "scroll_100", ratio: 1 }, { state: "scroll_up", ratio: .5 }, { state: "restored_top", ratio: 0 }
+  ];
+  const merged = new Map<string, ObservedRawElement>();
+  const states: PageStateObservation[] = [];
+  for (const step of plan) {
+    const targetY = await page.evaluate((ratio) => Math.round(Math.max(0, document.documentElement.scrollHeight - innerHeight) * ratio), step.ratio);
+    await page.evaluate((scrollY) => scrollTo(0, scrollY), targetY);
+    await page.waitForTimeout(step.state === "initial" ? 180 : 140);
+    const rows = await collectRawElements(page, maxElements, maxTotalText);
+    const metrics = await page.evaluate(() => ({ scrollY: Math.round(window.scrollY), documentHeight: document.documentElement.scrollHeight }));
+    states.push({ state: step.state, ...metrics, inViewportElementCount: rows.filter((row) => row.inViewport).length });
+    for (const raw of rows) {
+      const key = raw.domPath || `${raw.tagName}:${raw.testId || raw.id || raw.accessibleName || raw.text || "unknown"}`;
+      const existing = merged.get(key);
+      if (existing) {
+        if (!existing.observedStates.includes(step.state)) existing.observedStates.push(step.state);
+        if (raw.inViewport && !existing.inViewportStates.includes(step.state)) existing.inViewportStates.push(step.state);
+      } else if (merged.size < maxElements) {
+        merged.set(key, { ...raw, observedStates: [step.state], inViewportStates: raw.inViewport ? [step.state] : [] });
+      }
+    }
+  }
+  return { elements: [...merged.values()], states };
 }
 
 async function collectRawElements(page: Page, maxElements: number, maxTotalText: number): Promise<RawElement[]> {
@@ -141,6 +173,17 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
       clean(value: string | null | undefined, max = 300) {
         const normalized = (value || "").replace(/\s+/g, " ").trim();
         const remaining = Math.max(0, maxTotalText - totalText); const result = normalized.slice(0, Math.min(max, remaining)); totalText += result.length; return result || undefined;
+      },
+      path(node: HTMLElement) {
+        if (node.dataset.testid) return `[data-testid="${node.dataset.testid}"]`;
+        if (node.id) return `#${CSS.escape(node.id)}`;
+        const parts: string[] = []; let current: HTMLElement | null = node;
+        while (current && current !== document.body) {
+          const parent: HTMLElement | null = current.parentElement; if (!parent) break;
+          const siblings = [...parent.children].filter((item) => item.tagName === current!.tagName);
+          parts.unshift(`${current.tagName.toLowerCase()}:nth-of-type(${siblings.indexOf(current) + 1})`); current = parent;
+        }
+        return `body>${parts.join(">")}`;
       }
     };
     return all.filter((node) => helpers.visible(node)).slice(0, maxElements).map((node) => {
@@ -150,6 +193,7 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
       const text = node.tagName === "INPUT" && input.type === "password" ? undefined : helpers.clean(node.innerText || (node.tagName === "IMG" ? image.alt : ""));
       const accessibleName = helpers.clean(node.getAttribute("aria-label") || label || text || node.getAttribute("title") || image.alt, 300);
       const ownerForm = node.tagName === "FORM" ? node as HTMLFormElement : node.closest("form");
+      const rect = node.getBoundingClientRect();
       return {
         tagName: node.tagName.toLowerCase(), role: role || undefined, accessibleName, label: helpers.clean(label), text,
         placeholder: helpers.clean(input.placeholder), testId: node.dataset.testid, href: anchor.href || undefined,
@@ -160,7 +204,8 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
         action: node.tagName === "FORM" ? form.action : undefined, alt: node.tagName === "IMG" ? image.alt : undefined,
         noFollow: node.tagName === "A" ? (node.getAttribute("rel") || "").split(/\s+/).includes("nofollow") : undefined,
         download: node.tagName === "A" ? node.hasAttribute("download") : undefined,
-        region: node.closest("header") ? "header" : node.closest("main") ? "main" : node.closest("footer") ? "footer" : "other"
+        region: node.closest("header") ? "header" : node.closest("main") ? "main" : node.closest("footer") ? "footer" : "other",
+        domPath: helpers.path(node), inViewport: rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth
       };
     });
   }, { maxElements, maxTotalText });

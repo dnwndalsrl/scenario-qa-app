@@ -24,12 +24,12 @@
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.0",
     "nuxt": "^4.0.3",
+    "openai": "^7.2.0",
     "pdf-parse": "^2.4.5",
     "vue": "^3.5.18",
     "vue-bundle-renderer": "^2.3.1",
     "vue-router": "^5.2.0",
-    "zod": "^4.4.3",
-    "openai": "^7.2.0"
+    "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "playwright": "1.62.1"

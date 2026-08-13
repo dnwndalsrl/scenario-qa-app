@@ -14,13 +14,32 @@ const existing = {
 
 describe("generated test editor", () => {
   it("replaces a URL assertion with a viewport assertion and increments the revision", () => {
-    const edited = buildEditedScenario(existing, snapshot, { title: "ABOUT US 섹션 이동", description: "", purpose: "섹션 도달", steps: [{ action: "assert_in_viewport", description: "섹션 표시", elementId: "element-1" }] });
-    expect(edited.steps[0]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { value: "ABOUT US" } });
+    const edited = buildEditedScenario(existing, snapshot, { title: "ABOUT US 섹션 이동", description: "", purpose: "섹션 도달", steps: [{ action: "scroll_into_view", description: "섹션으로 스크롤", elementId: "element-1" }, { action: "assert_in_viewport", description: "섹션 표시", elementId: "element-1" }] });
+    expect(edited.steps[0]).toMatchObject({ action: "scroll_into_view", elementId: "element-1", locator: { value: "ABOUT US" } });
+    expect(edited.steps[1]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { value: "ABOUT US" } });
     expect(edited).toMatchObject({ revision: 2, source: "user", safetyLevel: "safe", autoExecutable: true });
   });
 
   it("rejects element actions without a discovered unique target", () => {
     expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 테스트", description: "", purpose: "", steps: [{ action: "click", description: "클릭", elementId: "element-404" }] })).toThrow("대상 요소");
+  });
+
+  it("stores page scroll preconditions without a target and stability waits with a target", () => {
+    const edited = buildEditedScenario(existing, snapshot, {
+      title: "동적 영역 확인", description: "", purpose: "동적 상태 재현", steps: [
+        { action: "scroll_to_ratio", description: "페이지 하단 상태 재현", value: "75" },
+        { action: "scroll_by", description: "동적 헤더 표시", value: "-240" },
+        { action: "wait_for_stable", description: "값 안정화", elementId: "element-1", value: "300" }
+      ]
+    });
+    expect(edited.steps[0]).toMatchObject({ action: "scroll_to_ratio", value: "75", elementId: undefined });
+    expect(edited.steps[1]).toMatchObject({ action: "scroll_by", value: "-240", elementId: undefined });
+    expect(edited.steps[2]).toMatchObject({ action: "wait_for_stable", elementId: "element-1", locator: { unique: true } });
+  });
+
+  it("rejects invalid dynamic-state values before execution", () => {
+    expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 스크롤", description: "", purpose: "", steps: [{ action: "scroll_to_ratio", description: "범위 초과", value: "101" }] })).toThrow("0~100");
+    expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 대기", description: "", purpose: "", steps: [{ action: "wait_for_stable", description: "너무 짧음", elementId: "element-1", value: "50" }] })).toThrow("100~5000");
   });
 
   it("creates a user-owned scenario that is ready for approval", () => {
