@@ -15,7 +15,8 @@ export async function generateTestsWithAi(snapshot: PageSnapshot, analysis: AiPa
   const input = {
     page: { url: snapshot.finalUrl, title: snapshot.title, headings: snapshot.headings, pageType: analysis.pageType, purpose: analysis.pagePurpose },
     functions: analysis.primaryFunctions, opportunities: analysis.testOpportunities,
-    elements: snapshot.elements.map(({ id, type, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates, safetyHints }) => ({ id, type, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates: locatorCandidates.filter((candidate) => candidate.unique).slice(0, 3), safetyHints })),
+    elements: snapshot.elements.map(({ id, type, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates, safetyHints, observedStates, inViewportStates }) => ({ id, type, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates: locatorCandidates.filter((candidate) => candidate.unique).slice(0, 3), safetyHints, observedStates, inViewportStates })),
+    stateObservations: snapshot.stateObservations,
     requirements: document?.requirements || [],
     limits: { maxScenarios: config.maxGeneratedScenarios, maxStepsPerScenario: config.maxStepsPerScenario }, testMode: "read_only"
   };

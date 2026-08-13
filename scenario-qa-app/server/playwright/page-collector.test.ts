@@ -31,6 +31,23 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(snapshot.networkIssues.some((item) => item.status === 404)).toBe(true);
   });
 
+  it("초기·하향·상향 스크롤 상태를 수집하고 동적 요소의 노출 시점을 보존한다", () => {
+    expect(snapshot.stateObservations?.map((item) => item.state)).toEqual([
+      "initial", "scroll_25", "scroll_50", "scroll_75", "scroll_100", "scroll_up", "restored_top"
+    ]);
+
+    const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading");
+    expect(lazyHeading).toBeDefined();
+    expect(lazyHeading?.observedStates).not.toContain("initial");
+    expect(lazyHeading?.observedStates?.some((state) => state === "scroll_75" || state === "scroll_100")).toBe(true);
+
+    const dynamicHeaderLink = snapshot.elements.find((element) => element.testId === "product-link");
+    expect(dynamicHeaderLink?.inViewportStates).toContain("initial");
+    expect(dynamicHeaderLink?.inViewportStates).not.toContain("scroll_25");
+    expect(dynamicHeaderLink?.inViewportStates).toContain("scroll_up");
+    expect(dynamicHeaderLink?.inViewportStates).toContain("restored_top");
+  });
+
   it("safe 테스트만 실행하고 실패·차단·증거 상태를 구분한다", async () => {
     const h1 = snapshot.elements.find((element) => element.type === "heading" && element.text === "안전한 QA Fixture")!;
     const danger = snapshot.elements.find((element) => element.testId === "delete-button")!;
@@ -41,8 +58,11 @@ describe("Playwright 페이지 수집과 실행", () => {
     ];
     const runs = await executeGeneratedTests(snapshot, tests);
     expect(runs.map((run) => run.status)).toEqual(["success", "failed", "blocked"]);
+    expect(runs[1]?.failureKind).toBe("product_defect");
+    expect(runs[1]?.stepResults[1]?.failureKind).toBe("product_defect");
     expect(runs[1]?.screenshotArtifactIds.length).toBeGreaterThan(0);
     expect(runs[2]?.error?.code).toBe("TEST_SAFETY_BLOCKED");
+    expect(runs[2]?.failureKind).toBe("safety_blocked");
   });
 
   it("navigates to the captured page before a scenario without a goto step", async () => {
@@ -90,6 +110,52 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.status).toBe("success");
     expect(run?.stepResults[1]?.actual).toContain("대상으로 스크롤");
     expect(run?.stepResults[2]?.actual).toContain("화면 내 도달");
+  });
+
+  it("does not scroll the page while asserting that a deep element is already in the viewport", async () => {
+    const target = snapshot.elements.find((element) => element.text === "상품 소개")!;
+    const locator = target.locatorCandidates.find((item) => item.unique)!;
+    const scenario = makeScenario("pure-viewport-assertion", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "assert_in_viewport", description: "스크롤 없이 상품 소개 노출 확인", elementId: target.id, locator, timeoutMs: 1000 }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("failed");
+    expect(run?.failureKind).toBe("product_defect");
+    expect(run?.stepResults[1]?.errorMessage).toContain("화면 영역으로 이동하지 않았습니다");
+  });
+
+  it("falls back to another captured locator for the same element", async () => {
+    const target = snapshot.elements.find((element) => element.testId === "info-button")!;
+    const scenario = makeScenario("locator-fallback", [{
+      action: "assert_visible",
+      description: "대체 locator로 정보 버튼 표시 확인",
+      elementId: target.id,
+      locator: { strategy: "test_id", value: "stale-info-button", score: 100, unique: true },
+      timeoutMs: 1000
+    }]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("success");
+    expect(run?.stepResults[0]?.locatorUsed).toMatchObject({ strategy: "test_id", value: "info-button" });
+  });
+
+  it("classifies an unresolved locator as an automation limitation instead of a product defect", async () => {
+    const scenario = makeScenario("missing-locator", [{
+      action: "assert_visible",
+      description: "존재하지 않는 locator 확인",
+      locator: { strategy: "test_id", value: "missing-target", score: 100, unique: true },
+      timeoutMs: 1000
+    }]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status).toBe("error");
+    expect(run?.failureKind).toBe("automation_limit");
+    expect(run?.stepResults[0]?.failureKind).toBe("automation_limit");
   });
 
   it("reveals a fixed header after downward scrolling before clicking its link", async () => {

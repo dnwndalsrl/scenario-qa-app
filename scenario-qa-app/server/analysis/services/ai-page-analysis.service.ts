@@ -9,7 +9,8 @@ export async function analyzePageWithAi(snapshot: PageSnapshot, document?: Requi
   const config = getAnalysisConfig();
   const input = {
     url: snapshot.finalUrl, title: snapshot.title, description: snapshot.description, language: snapshot.language, headings: snapshot.headings,
-    elements: snapshot.elements.map(({ id, type, role, accessibleName, label, text, placeholder, href, inputType, enabled, required, safetyHints }) => ({ id, type, role, accessibleName, label, text, placeholder, href, inputType, enabled, required, safetyHints })),
+    elements: snapshot.elements.map(({ id, type, role, accessibleName, label, text, placeholder, href, inputType, enabled, required, safetyHints, observedStates, inViewportStates }) => ({ id, type, role, accessibleName, label, text, placeholder, href, inputType, enabled, required, safetyHints, observedStates, inViewportStates })),
+    stateObservations: snapshot.stateObservations,
     forms: snapshot.forms, internalLinks: snapshot.internalLinks,
     consoleIssueSummary: snapshot.consoleMessages.map(({ type, text }) => ({ type, text })).slice(0, 30),
     networkIssueSummary: snapshot.networkIssues.map(({ url, method, resourceType, status, failureText }) => ({ url, method, resourceType, status, failureText })).slice(0, 30),

@@ -8,8 +8,10 @@ export type SiteAnalysisStatus =
 export type PageType = "landing" | "login" | "signup" | "search" | "list" | "detail" | "dashboard" | "form" | "settings" | "article" | "unknown";
 export type TestSafetyLevel = "safe" | "review_required" | "blocked";
 export type TestRunStatus = "pending" | "running" | "success" | "failed" | "blocked" | "error";
+export type TestFailureKind = "product_defect" | "automation_limit" | "environment_error" | "inconclusive" | "safety_blocked";
 export type GeneratedTestAction = "goto" | "scroll_into_view" | "assert_url" | "assert_title" | "assert_visible" | "assert_in_viewport" | "assert_enabled" | "assert_text" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
 export type LocatorStrategy = "test_id" | "role" | "label" | "placeholder" | "text" | "css";
+export type PageObservationState = "initial" | "scroll_25" | "scroll_50" | "scroll_75" | "scroll_100" | "scroll_up" | "restored_top";
 export type DiscoveredElementType = "link" | "button" | "input" | "textarea" | "select" | "checkbox" | "radio" | "form" | "heading" | "navigation" | "table" | "dialog" | "tab" | "alert" | "image" | "other";
 export type CrawlPageStatus = "queued" | "visiting" | "collected" | "analyzed" | "failed" | "skipped";
 export type CrawlSkipReason = "external_origin" | "duplicate_url" | "depth_limit" | "page_limit" | "blocked_protocol" | "dangerous_path" | "download_link" | "mailto" | "telephone" | "fragment_only" | "nofollow" | "logout" | "unsupported_content" | "redirect" | "pattern_limit" | "duplicate_page" | "manual";
@@ -23,12 +25,14 @@ export interface SiteAnalysisOptions {
 export interface AnalysisSummary {
   pageType?: PageType; pagePurpose?: string; discoveredElementCount: number; discoveredFunctionCount: number;
   generatedTestCount: number; executedTestCount: number; successCount: number; failedCount: number; blockedCount: number; errorCount: number;
+  inconclusiveCount: number;
   consoleErrorCount: number; networkIssueCount: number; criticalIssueCount: number; warningCount: number;
   overallStatus: "passed" | "passed_with_warnings" | "failed" | "analysis_error";
 }
 export interface SiteAnalysisSummary {
   sitePurpose?: string; totalDiscoveredUrls: number; totalVisitedPages: number; totalAnalyzedPages: number; skippedPageCount: number; failedPageCount: number;
   discoveredFunctionCount: number; generatedTestCount: number; executedTestCount: number; successCount: number; failedCount: number; blockedCount: number; errorCount: number;
+  inconclusiveCount: number;
   consoleErrorCount: number; networkIssueCount: number; brokenInternalLinkCount: number; accessibilityIssueCount: number;
   overallStatus: "passed" | "passed_with_warnings" | "failed" | "partially_completed" | "analysis_error";
 }
@@ -75,7 +79,9 @@ export interface DiscoveredElement {
   id: string; type: DiscoveredElementType; tagName: string; role?: string; accessibleName?: string; label?: string; text?: string;
   placeholder?: string; testId?: string; href?: string; inputType?: string; visible: boolean; enabled?: boolean; required?: boolean;
   readonly?: boolean; locatorCandidates: LocatorCandidate[]; safetyHints: string[];
+  observedStates?: PageObservationState[]; inViewportStates?: PageObservationState[];
 }
+export interface PageStateObservation { state: PageObservationState; scrollY: number; documentHeight: number; inViewportElementCount: number; }
 export interface PageHeading { level: number; text: string; elementId: string; }
 export interface DiscoveredForm { elementId: string; method: string; action?: string; fieldElementIds: string[]; }
 export interface DiscoveredLink { elementId: string; href: string; text?: string; accessibleName?: string; internal: boolean; noFollow?: boolean; download?: boolean; region?: "header" | "main" | "footer" | "other"; visible?: boolean; }
@@ -85,7 +91,7 @@ export interface PageSnapshot {
   id: string; analysisId: string; pageId?: string; requestedUrl: string; finalUrl: string; canonicalUrl?: string; title: string; description?: string; language?: string;
   httpStatus?: number; contentType?: string; viewport: { width: number; height: number }; headings: PageHeading[]; elements: DiscoveredElement[]; forms: DiscoveredForm[];
   internalLinks: DiscoveredLink[]; consoleMessages: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; domFingerprint?: string;
-  screenshotArtifactId?: string; collectedAt: string;
+  stateObservations?: PageStateObservation[]; screenshotArtifactId?: string; collectedAt: string;
 }
 export interface DiscoveredFunction { id: string; name: string; description: string; relatedElementIds: string[]; confidence: number; }
 export interface PageRisk { id: string; title: string; description: string; severity: "low" | "medium" | "high"; relatedElementIds: string[]; }
@@ -108,12 +114,13 @@ export interface DuplicateTestGroup { fingerprint: string; keptTestId: string; r
 export interface TestDeduplicationResult { originalCount: number; deduplicatedCount: number; removedCount: number; groups: DuplicateTestGroup[]; }
 export interface AutomatedStepResult {
   stepId: string; order: number; action: GeneratedTestAction; description: string; status: TestRunStatus; expected?: string; actual?: string;
-  currentUrl?: string; screenshotArtifactId?: string; errorMessage?: string; startedAt?: string; completedAt?: string; durationMs?: number;
+  currentUrl?: string; screenshotArtifactId?: string; errorMessage?: string; failureKind?: TestFailureKind; locatorUsed?: LocatorCandidate;
+  startedAt?: string; completedAt?: string; durationMs?: number;
 }
 export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
-  startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError;
+  startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
   trigger?: "initial" | "manual_rerun" | "approved_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
