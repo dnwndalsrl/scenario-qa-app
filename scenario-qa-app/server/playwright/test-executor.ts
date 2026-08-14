@@ -144,7 +144,7 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
   }
   if (step.action === "wait_for_stable") {
     if (!locatorUsed) return "페이지 콘텐츠 안정화 확인";
-    return `안정화된 값: ${sanitizeText(await resolveLocator(page, locatorUsed).innerText(), 500)}`;
+    return readStableActualValue(page, locatorUsed);
   }
   if (step.action === "assert_in_viewport" || step.action === "scroll_into_view") {
     const candidate = locatorUsed ?? step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
@@ -159,6 +159,13 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     return `${prefix}(top ${rect.top}px / ${rect.viewportHeight}px) · 스크롤 이벤트 ${scroll.eventCount}회 · 이동 ${Math.round(scroll.lastY - scroll.startedY)}px`;
   }
   return undefined;
+}
+
+export async function readStableActualValue(page: Page, locatorUsed: LocatorCandidate): Promise<string> {
+  const text = await resolveLocator(page, locatorUsed).innerText().catch(() => undefined);
+  return text === undefined
+    ? "페이지 콘텐츠 안정화 확인"
+    : `안정화된 값: ${sanitizeText(text, 500)}`;
 }
 function baseStep(step: GeneratedTestStep, status: AutomatedStepResult["status"], errorMessage?: string): AutomatedStepResult { return { stepId: step.id, order: step.order, action: step.action, description: step.description, status, errorMessage }; }
 function isAssertion(step: GeneratedTestStep) { return step.action.startsWith("assert_"); }
