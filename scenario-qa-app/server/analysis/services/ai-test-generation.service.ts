@@ -31,18 +31,43 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
   return raw.scenarios.slice(0, config.maxGeneratedScenarios).map((scenario) => {
     if (scenario.sourceElementIds.some((id) => !elements.has(id))) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Unknown source element id");
     const steps = scenario.steps.slice(0, config.maxStepsPerScenario).map((step, index) => {
-      const element = step.elementId ? elements.get(step.elementId) : undefined;
+      const repairedStep = repairClickTarget(step, snapshot);
+      const element = repairedStep.elementId ? elements.get(repairedStep.elementId) : undefined;
       if (step.elementId && !element) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Unknown step element id");
-      const discoveredLocator = step.locator && element?.locatorCandidates.find((candidate) => candidate.strategy === step.locator!.strategy && candidate.value === step.locator!.value);
-      const equivalentHrefClick = step.action === "click" && discoveredLocator?.strategy === "css" && discoveredLocator.value.includes("[href");
-      if (step.locator && (!discoveredLocator || !discoveredLocator.unique && !equivalentHrefClick)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not executable");
-      if (step.action === "click" && element && !["a", "button", "input", "select", "textarea"].includes(element.tagName) && !["link", "button", "tab"].includes(element.role || "")) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Click target is not interactive");
-      const numericValue = Number(step.value);
-      if (step.action === "scroll_to_ratio" && (!step.value?.trim() || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 100)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll ratio");
-      if (step.action === "scroll_by" && (!step.value?.trim() || !Number.isFinite(numericValue) || numericValue < -10000 || numericValue > 10000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll distance");
-      if (step.action === "wait_for_stable" && step.value?.trim() && (!Number.isFinite(numericValue) || numericValue < 100 || numericValue > 5000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid stability wait");
-      return { ...step, elementId: step.elementId ?? undefined, locator: step.locator ?? undefined, value: step.value ?? undefined, expected: step.expected ?? undefined, timeoutMs: step.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(step.evidence || []), ...(step.elementId ? [`근거 요소: ${step.elementId}`] : [])])] };
+      const discoveredLocator = repairedStep.locator && element?.locatorCandidates.find((candidate) => candidate.strategy === repairedStep.locator!.strategy && candidate.value === repairedStep.locator!.value);
+      const equivalentHrefClick = repairedStep.action === "click" && discoveredLocator?.strategy === "css" && discoveredLocator.value.includes("[href");
+      if (repairedStep.locator && (!discoveredLocator || !discoveredLocator.unique && !equivalentHrefClick)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not executable");
+      if (repairedStep.action === "click" && element && !isInteractive(element)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Click target is not interactive");
+      const numericValue = Number(repairedStep.value);
+      if (repairedStep.action === "scroll_to_ratio" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 100)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll ratio");
+      if (repairedStep.action === "scroll_by" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < -10000 || numericValue > 10000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll distance");
+      if (repairedStep.action === "wait_for_stable" && repairedStep.value?.trim() && (!Number.isFinite(numericValue) || numericValue < 100 || numericValue > 5000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid stability wait");
+      return { ...repairedStep, elementId: repairedStep.elementId ?? undefined, locator: repairedStep.locator ?? undefined, value: repairedStep.value ?? undefined, expected: repairedStep.expected ?? undefined, timeoutMs: repairedStep.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(repairedStep.evidence || []), ...(repairedStep.elementId ? [`근거 요소: ${repairedStep.elementId}`] : [])])] };
     });
-    return enforceSafety({ ...scenario, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
+    const sourceElementIds = [...new Set([...scenario.sourceElementIds, ...steps.map((step) => step.elementId).filter((id): id is string => Boolean(id))])];
+    return enforceSafety({ ...scenario, sourceElementIds, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
   });
+}
+
+function repairClickTarget<T extends GeneratedPayload["scenarios"][number]["steps"][number]>(step: T, snapshot: PageSnapshot): T {
+  if (step.action !== "click" || !step.elementId) return step;
+  const target = snapshot.elements.find((element) => element.id === step.elementId);
+  if (!target || isInteractive(target)) return step;
+  const targetName = normalizedName(target);
+  const replacement = targetName && snapshot.elements.find((element) => isInteractive(element) && normalizedName(element) === targetName && executableClickLocator(element));
+  const locator = replacement && executableClickLocator(replacement);
+  return replacement && locator ? { ...step, elementId: replacement.id, locator } : step;
+}
+
+function executableClickLocator(element: PageSnapshot["elements"][number]) {
+  return element.locatorCandidates.find((candidate) => candidate.strategy === "css" && candidate.value.includes("[href"))
+    || element.locatorCandidates.find((candidate) => candidate.unique);
+}
+
+function normalizedName(element: PageSnapshot["elements"][number]): string {
+  return (element.accessibleName || element.text || element.label || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+}
+
+function isInteractive(element: PageSnapshot["elements"][number]): boolean {
+  return ["a", "button", "input", "select", "textarea"].includes(element.tagName) || ["link", "button", "tab"].includes(element.role || "");
 }
