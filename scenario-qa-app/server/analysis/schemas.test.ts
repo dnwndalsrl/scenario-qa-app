@@ -54,9 +54,12 @@ describe("AI 구조화 출력 검증", () => {
   it("AI 검증 실패 시 실제 내부 링크를 사용하는 안전한 대체 시나리오를 만든다", () => {
     const hrefLocator = { strategy: "css" as const, value: 'a[href$="/smartfarm/system/"]', score: 85, unique: false };
     const snapshot = { id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com/", finalUrl: "https://example.com/", title: "Example", viewport: { width: 1440, height: 900 }, headings: [], forms: [], internalLinks: [], consoleMessages: [], networkIssues: [], collectedAt: new Date().toISOString(), elements: [
-      { id: "element-link", type: "link", tagName: "a", role: "link", accessibleName: "Smart-Farm 시스템", href: "https://example.com/smartfarm/system/", visible: true, locatorCandidates: [hrefLocator], safetyHints: [] }
+      { id: "element-link", type: "link", tagName: "a", role: "link", accessibleName: "Smart-Farm 시스템", href: "https://example.com/smartfarm/system/", visible: true, locatorCandidates: [hrefLocator], safetyHints: [] },
+      { id: "element-skip", type: "link", tagName: "a", role: "link", accessibleName: "Skip to content", href: "https://example.com/#content", visible: true, locatorCandidates: [{ strategy: "role", value: "link::Skip to content", score: 90, unique: true }], safetyHints: [] },
+      { id: "element-home", type: "link", tagName: "a", role: "link", accessibleName: "Home", href: "https://example.com/", visible: true, locatorCandidates: [{ strategy: "role", value: "link::Home", score: 90, unique: true }], safetyHints: [] }
     ] } as PageSnapshot;
 
+    expect(buildFallbackTests(snapshot)).toHaveLength(1);
     expect(buildFallbackTests(snapshot)[0]).toMatchObject({ safetyLevel: "safe", sourceElementIds: ["element-link"], steps: [{ action: "wait_for_stable" }, { action: "click", elementId: "element-link", locator: hrefLocator }] });
   });
 });

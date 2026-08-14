@@ -78,7 +78,7 @@ function isInteractive(element: PageSnapshot["elements"][number]): boolean {
 
 export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenario[] {
   const config = getAnalysisConfig();
-  const internalLinks = snapshot.elements.filter((element) => element.href && isInteractive(element) && executableClickLocator(element) && isSameOrigin(element.href, snapshot.finalUrl));
+  const internalLinks = snapshot.elements.filter((element) => element.href && isInteractive(element) && executableClickLocator(element) && isMeaningfulInternalLink(element.href, snapshot.finalUrl));
   const visibleElements = snapshot.elements.filter((element) => element.visible && element.locatorCandidates.some((candidate) => candidate.unique));
   const linkScenarios = internalLinks.slice(0, config.maxGeneratedScenarios).map((element) => {
     const locator = executableClickLocator(element)!;
@@ -107,7 +107,11 @@ export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenari
   });
 }
 
-function isSameOrigin(href: string, pageUrl: string): boolean {
-  try { return new URL(href, pageUrl).origin === new URL(pageUrl).origin; }
+function isMeaningfulInternalLink(href: string, pageUrl: string): boolean {
+  try {
+    const link = new URL(href, pageUrl);
+    const page = new URL(pageUrl);
+    return link.origin === page.origin && link.pathname !== "/" && (link.pathname !== page.pathname || link.search !== page.search);
+  }
   catch { return false; }
 }
