@@ -206,6 +206,34 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.status).toBe("success");
     expect(run?.stepResults[2]?.currentUrl).toContain("/about");
   });
+
+  it("uses the single visible match when a locator also matches a hidden clone", async () => {
+    const scenario = makeScenario("visible-locator-match", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "click", description: "표시된 Product 링크 클릭", locator: { strategy: "text", value: "Product", score: 60, unique: true } },
+      { action: "assert_url", description: "상품 페이지 이동 확인", expected: "/products" }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.currentUrl).toContain("/products");
+  });
+
+  it("falls back to page-level stability when no target element is supplied", async () => {
+    const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading")!;
+    const scenario = makeScenario("page-stability-fallback", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "scroll_to_ratio", description: "지연 콘텐츠 위치로 스크롤", value: "100" },
+      { action: "wait_for_stable", description: "사라진 대상 대신 페이지 콘텐츠 안정화 대기", locator: { strategy: "test_id", value: "missing-dynamic-target", score: 100, unique: true }, value: "300" },
+      { action: "assert_visible", description: "지연 로딩 제목 확인", elementId: lazyHeading.id, locator: lazyHeading.locatorCandidates.find((item) => item.unique)! }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.actual).toBe("페이지 콘텐츠 안정화 확인");
+  });
 });
 
 function makeScenario(id: string, steps: Array<Partial<GeneratedTestScenario["steps"][number]> & Pick<GeneratedTestScenario["steps"][number], "action" | "description">>): GeneratedTestScenario {

@@ -31,4 +31,10 @@ describe("AI 구조화 출력 검증", () => {
     expect(() => validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-404"], steps: [{ order: 1, action: "assert_visible", description: "표시", elementId: "element-404", locator: null, value: null, expected: null, timeoutMs: null, evidence: [] }] }] }, snapshot)).toThrow();
     expect(() => validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-1"], steps: [{ order: 1, action: "assert_visible", description: "표시", elementId: "element-1", locator: { strategy: "test_id", value: "invented", score: 100, unique: true }, value: null, expected: null, timeoutMs: null, evidence: [] }] }] }, snapshot)).toThrow();
   });
+  it("요소가 없는 페이지 단위 안정화 대기를 허용한다", () => {
+    const snapshot = { id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com/", finalUrl: "https://example.com/", title: "Example", viewport: { width: 1440, height: 900 }, headings: [], forms: [], internalLinks: [], consoleMessages: [], networkIssues: [], collectedAt: new Date().toISOString(), elements: [] } as PageSnapshot;
+    const base = { title: "동적 페이지", description: "설명", purpose: "안정화", category: "visibility" as const, safetyLevel: "safe" as const, confidence: .8, autoExecutable: true, requirementIds: [], sourceElementIds: [] };
+    const [scenario] = validateGeneratedTestPayload({ scenarios: [{ ...base, steps: [{ order: 1, action: "wait_for_stable", description: "페이지 안정화", elementId: null, locator: null, value: "300", expected: null, timeoutMs: null, evidence: [] }] }] }, snapshot);
+    expect(scenario?.steps[0]).toMatchObject({ action: "wait_for_stable", elementId: undefined, value: "300" });
+  });
 });

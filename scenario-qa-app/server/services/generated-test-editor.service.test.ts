@@ -37,6 +37,14 @@ describe("generated test editor", () => {
     expect(edited.steps[2]).toMatchObject({ action: "wait_for_stable", elementId: "element-1", locator: { unique: true } });
   });
 
+  it("stores a page-level stability wait without requiring a target", () => {
+    const edited = buildEditedScenario(existing, snapshot, {
+      title: "페이지 안정화", description: "", purpose: "동적 콘텐츠 대기",
+      steps: [{ action: "wait_for_stable", description: "페이지 전체 안정화", value: "300" }]
+    });
+    expect(edited.steps[0]).toMatchObject({ action: "wait_for_stable", value: "300", elementId: undefined, locator: undefined });
+  });
+
   it("rejects invalid dynamic-state values before execution", () => {
     expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 스크롤", description: "", purpose: "", steps: [{ action: "scroll_to_ratio", description: "범위 초과", value: "101" }] })).toThrow("0~100");
     expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 대기", description: "", purpose: "", steps: [{ action: "wait_for_stable", description: "너무 짧음", elementId: "element-1", value: "50" }] })).toThrow("100~5000");
