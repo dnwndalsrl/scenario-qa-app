@@ -26,6 +26,9 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(JSON.stringify(snapshot)).not.toContain("never-collect-this");
     const info = snapshot.elements.find((element) => element.testId === "info-button");
     expect(info?.locatorCandidates[0]).toMatchObject({ strategy: "test_id", value: "info-button", unique: true });
+    const overlayLink = snapshot.elements.find((element) => element.href?.endsWith("/smartfarm/system/"));
+    expect(overlayLink).toMatchObject({ type: "link", accessibleName: "Smart-Farm 시스템" });
+    expect(overlayLink?.locatorCandidates).toContainEqual(expect.objectContaining({ strategy: "css", value: 'a[href$="/smartfarm/system/"]' }));
     expect(snapshot.screenshotArtifactId).toMatch(/^artifact-/);
     expect(snapshot.consoleMessages.some((item) => item.type === "warning")).toBe(true);
     expect(snapshot.networkIssues.some((item) => item.status === 404)).toBe(true);

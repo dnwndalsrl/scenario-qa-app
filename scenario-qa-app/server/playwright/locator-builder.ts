@@ -1,6 +1,6 @@
 import type { LocatorCandidate } from "../../shared/types/analysis";
 
-export interface RawElementForLocator { tagName: string; role?: string; accessibleName?: string; label?: string; placeholder?: string; testId?: string; text?: string; id?: string; classes?: string[]; }
+export interface RawElementForLocator { tagName: string; role?: string; accessibleName?: string; label?: string; placeholder?: string; testId?: string; text?: string; href?: string; id?: string; classes?: string[]; }
 
 export function buildLocatorCandidates(element: RawElementForLocator): LocatorCandidate[] {
   const candidates: LocatorCandidate[] = [];
@@ -9,6 +9,7 @@ export function buildLocatorCandidates(element: RawElementForLocator): LocatorCa
   };
   add("test_id", element.testId, 100);
   if (element.role && element.accessibleName) add("role", `${element.role}::${element.accessibleName}`, 90);
+  if (element.tagName === "a" && element.href) add("css", hrefSelector(element.href), 85);
   add("label", element.label, 80);
   add("placeholder", element.placeholder, 70);
   if ((element.text?.length ?? 0) <= 120) add("text", element.text, 60);
@@ -17,6 +18,13 @@ export function buildLocatorCandidates(element: RawElementForLocator): LocatorCa
   if (stableClass) add("css", `${element.tagName}.${cssEscape(stableClass)}`, 35);
   if (!candidates.length) add("css", element.tagName, 10);
   return candidates.sort((a, b) => b.score - a.score);
+}
+
+function hrefSelector(href: string): string | undefined {
+  try {
+    const path = new URL(href, "https://probe.invalid").pathname;
+    return path && path !== "/" ? `a[href$="${path.replace(/["\\]/g, "\\$&")}"]` : undefined;
+  } catch { return undefined; }
 }
 
 function cssEscape(value: string): string { return value.replace(/([^a-zA-Z0-9_-])/g, "\\$1"); }

@@ -191,7 +191,8 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
       const label = node.id ? document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(node.id)}"]`)?.innerText : node.closest("label")?.textContent;
       const role = node.getAttribute("role") || ({ A: "link", BUTTON: "button", NAV: "navigation", MAIN: "main", HEADER: "banner", FOOTER: "contentinfo", ASIDE: "complementary", TABLE: "table" } as Record<string,string>)[node.tagName];
       const text = node.tagName === "INPUT" && input.type === "password" ? undefined : helpers.clean(node.innerText || (node.tagName === "IMG" ? image.alt : ""));
-      const accessibleName = helpers.clean(node.getAttribute("aria-label") || label || text || node.getAttribute("title") || image.alt, 300);
+      const linkedHeading = node.tagName === "A" && !text ? node.parentElement?.querySelector("h1,h2,h3,h4,h5,h6")?.textContent : undefined;
+      const accessibleName = helpers.clean(node.getAttribute("aria-label") || label || text || node.getAttribute("title") || image.alt || linkedHeading, 300);
       const ownerForm = node.tagName === "FORM" ? node as HTMLFormElement : node.closest("form");
       const rect = node.getBoundingClientRect();
       return {

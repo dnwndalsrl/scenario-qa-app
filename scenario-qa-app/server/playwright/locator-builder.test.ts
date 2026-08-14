@@ -9,6 +9,7 @@ describe("DOM 정규화 유틸리티", () => {
     expect(values.some((item) => item.value.includes("nth-child"))).toBe(false);
   });
   it("hash class는 CSS 후보에서 제외한다", () => expect(buildLocatorCandidates({ tagName: "div", classes: ["css-a83f91bc", "stable-card"] }).find((item) => item.strategy === "css")?.value).toBe("div.stable-card"));
+  it("텍스트 없는 오버레이 링크에 경로 기반 CSS 후보를 만든다", () => expect(buildLocatorCandidates({ tagName: "a", href: "https://example.com/smartfarm/system/" }).find((item) => item.score === 85)?.value).toBe('a[href$="/smartfarm/system/"]'));
   it("민감 query와 긴 텍스트를 정제한다", () => {
     expect(sanitizeUrl("https://example.com?a=1&token=secret")).toContain("token=%5BREDACTED%5D");
     expect(sanitizeText("password=secret " + "x".repeat(500), 40)).toHaveLength(40);
