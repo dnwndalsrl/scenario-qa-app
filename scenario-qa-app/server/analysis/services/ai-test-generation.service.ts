@@ -21,7 +21,11 @@ export async function generateTestsWithAi(snapshot: PageSnapshot, analysis: AiPa
     limits: { maxScenarios: config.maxGeneratedScenarios, maxStepsPerScenario: config.maxStepsPerScenario }, testMode: "read_only"
   };
   const raw = await requestStructuredJson({ apiKey: config.openaiApiKey, model: config.testGenerationModel, system: TEST_GENERATION_SYSTEM_PROMPT, input, schema: generatedTestResponseSchema, schemaName: "generated_tests", failureCode: "AI_TEST_GENERATION_FAILED", invalidCode: "AI_TEST_GENERATION_INVALID_RESPONSE" });
-  return validateGeneratedTestPayload(raw, snapshot, document);
+  try { return validateGeneratedTestPayload(raw, snapshot, document); }
+  catch (error) {
+    console.warn(`[qa] AI test validation fallback: ${error instanceof AppError ? error.detail || error.message : String(error)}`);
+    return buildFallbackTests(snapshot);
+  }
 }
 
 export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: PageSnapshot, document?: RequirementDocumentAnalysis): GeneratedTestScenario[] {
@@ -70,4 +74,40 @@ function normalizedName(element: PageSnapshot["elements"][number]): string {
 
 function isInteractive(element: PageSnapshot["elements"][number]): boolean {
   return ["a", "button", "input", "select", "textarea"].includes(element.tagName) || ["link", "button", "tab"].includes(element.role || "");
+}
+
+export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenario[] {
+  const config = getAnalysisConfig();
+  const internalLinks = snapshot.elements.filter((element) => element.href && isInteractive(element) && executableClickLocator(element) && isSameOrigin(element.href, snapshot.finalUrl));
+  const visibleElements = snapshot.elements.filter((element) => element.visible && element.locatorCandidates.some((candidate) => candidate.unique));
+  const linkScenarios = internalLinks.slice(0, config.maxGeneratedScenarios).map((element) => {
+    const locator = executableClickLocator(element)!;
+    const name = element.accessibleName || element.text || element.label || "내부 링크";
+    return enforceSafety({
+      id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId,
+      title: `${name} 링크 이동 확인`, description: `${name} 링크가 실제 상호작용 요소로 동작하는지 확인합니다.`, purpose: "내부 페이지 이동 검증",
+      category: "navigation", safetyLevel: "safe", safetyReasons: [], confidence: .7, autoExecutable: true, sourceElementIds: [element.id], requirementIds: [],
+      steps: [
+        { id: createId("step"), order: 1, action: "wait_for_stable", description: "페이지가 안정될 때까지 대기", value: "300", evidence: [] },
+        { id: createId("step"), order: 2, action: "click", description: `${name} 링크 클릭`, elementId: element.id, locator, evidence: [`근거 요소: ${element.id}`] }
+      ], generatedAt: new Date().toISOString()
+    });
+  });
+  if (linkScenarios.length) return linkScenarios;
+  return visibleElements.slice(0, config.maxGeneratedScenarios).map((element) => {
+    const locator = element.locatorCandidates.find((candidate) => candidate.unique)!;
+    const name = element.accessibleName || element.text || element.label || element.id;
+    return enforceSafety({
+      id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId,
+      title: `${name} 표시 확인`, description: `${name} 요소가 화면에 표시되는지 확인합니다.`, purpose: "핵심 요소 표시 검증",
+      category: "visibility", safetyLevel: "safe", safetyReasons: [], confidence: .65, autoExecutable: true, sourceElementIds: [element.id], requirementIds: [],
+      steps: [{ id: createId("step"), order: 1, action: "assert_visible", description: `${name} 표시 확인`, elementId: element.id, locator, evidence: [`근거 요소: ${element.id}`] }],
+      generatedAt: new Date().toISOString()
+    });
+  });
+}
+
+function isSameOrigin(href: string, pageUrl: string): boolean {
+  try { return new URL(href, pageUrl).origin === new URL(pageUrl).origin; }
+  catch { return false; }
 }
