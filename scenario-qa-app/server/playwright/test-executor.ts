@@ -179,7 +179,7 @@ function stepNumber(step: GeneratedTestStep, label: string, min: number, max: nu
 async function resolveStepLocator(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, timeout: number) {
   const element = step.elementId ? snapshot.elements.find((item) => item.id === step.elementId) : undefined;
   const stepLocator = !element || element.locatorCandidates.some((item) => item.strategy === step.locator?.strategy && item.value === step.locator.value) ? step.locator : undefined;
-  const candidates = [stepLocator, ...(element?.locatorCandidates.filter((item) => item.unique) || [])]
+  const candidates = [stepLocator, ...(element?.locatorCandidates || [])]
     .filter((item): item is LocatorCandidate => Boolean(item))
     .filter((item, index, values) => values.findIndex((value) => value.strategy === item.strategy && value.value === item.value) === index);
   if (!candidates.length) throw new AppError("TEST_LOCATOR_NOT_FOUND");
