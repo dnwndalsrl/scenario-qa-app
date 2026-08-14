@@ -119,8 +119,9 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     case "assert_text": { const text = await locator.innerText({ timeout }); if (!text.includes(step.expected || "")) throw new Error(`예상 텍스트를 찾지 못했습니다: ${text}`); break; }
     case "click": {
       await resetScrollTracking(page);
-      await revealDynamicHeader(page, locator, timeout);
-      try { await locator.click({ timeout }); }
+      const actionable = await resolveActionableLocator(locator);
+      await revealDynamicHeader(page, actionable, timeout);
+      try { await actionable.click({ timeout }); }
       catch (error) { throw new AppError("TEST_TARGET_NOT_ACTIONABLE", undefined, 400, error instanceof Error ? error.message : String(error)); }
       break;
     }
@@ -198,6 +199,10 @@ async function resolveStepLocator(page: Page, snapshot: PageSnapshot, step: Gene
             if (await locator.nth(index).isVisible().catch(() => false)) visibleIndexes.push(index);
           }
           if (visibleIndexes.length === 1) return { locator: locator.nth(visibleIndexes[0]!), candidate };
+          if (step.action === "click" && visibleIndexes.length > 1) {
+            const signatures = await Promise.all(visibleIndexes.map((index) => actionableSignature(locator.nth(index))));
+            if (signatures.every(Boolean) && new Set(signatures).size === 1) return { locator: locator.nth(visibleIndexes[0]!), candidate };
+          }
           if (visibleIndexes.length > 1) ambiguous = true;
         }
       } catch { /* 다음 후보를 확인합니다. */ }
@@ -206,6 +211,33 @@ async function resolveStepLocator(page: Page, snapshot: PageSnapshot, step: Gene
   }
   if (ambiguous) throw new AppError("TEST_LOCATOR_NOT_UNIQUE");
   throw new AppError("TEST_LOCATOR_NOT_FOUND", "저장된 locator 후보로 테스트 대상 요소를 찾지 못했습니다.");
+}
+
+async function actionableSignature(locator: import("playwright").Locator): Promise<string | undefined> {
+  return locator.evaluate((element) => {
+    const direct = element.closest("a[href],button,[role='link'],[role='button']");
+    let target = direct;
+    let parent = element.parentElement;
+    for (let depth = 0; !target && parent && depth < 3; depth += 1, parent = parent.parentElement) {
+      const controls = parent.querySelectorAll(":scope > a[href],:scope > button,:scope > [role='link'],:scope > [role='button']");
+      if (controls.length === 1) target = controls.item(0);
+    }
+    if (!target) return undefined;
+    const href = target instanceof HTMLAnchorElement ? new URL(target.href, location.href).href : "";
+    return `${target.tagName.toLowerCase()}:${href}:${target.getAttribute("role") || ""}:${target.getAttribute("type") || ""}`;
+  }).catch(() => undefined);
+}
+
+async function resolveActionableLocator(locator: import("playwright").Locator): Promise<import("playwright").Locator> {
+  const direct = locator.locator("xpath=ancestor-or-self::*[self::a or self::button or @role='link' or @role='button'][1]");
+  if (await direct.count() === 1) return direct;
+  let parent = locator.locator("xpath=..");
+  for (let depth = 0; depth < 3; depth += 1) {
+    const controls = parent.locator(":scope > a[href],:scope > button,:scope > [role='link'],:scope > [role='button']");
+    if (await controls.count() === 1) return controls.first();
+    parent = parent.locator("xpath=..");
+  }
+  return locator;
 }
 
 function classifyFailure(step: GeneratedTestStep, error: unknown): TestFailureKind {
