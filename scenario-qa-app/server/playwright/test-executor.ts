@@ -99,10 +99,20 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
   }
   if (step.action === "assert_url") { if (!page.url().includes(step.expected || snapshot.finalUrl)) throw new Error(`예상 URL과 다릅니다: ${page.url()}`); return undefined; }
   if (step.action === "assert_title") { const title = await page.title(); if (step.expected ? !title.includes(step.expected) : !title.trim()) throw new Error(`페이지 제목이 예상과 다릅니다: ${title}`); return undefined; }
+  if (step.action === "wait_for_stable") {
+    const resolved = step.elementId || step.locator
+      ? await resolveStepLocator(page, snapshot, step, Math.min(timeout, 1500)).catch((error) => {
+        if (error instanceof AppError && ["TEST_LOCATOR_NOT_FOUND", "TEST_LOCATOR_NOT_UNIQUE"].includes(error.code)) return undefined;
+        throw error;
+      })
+      : undefined;
+    if (resolved) await waitForElementStable(page, resolved.locator, step.value, timeout);
+    else await waitForPageContentStable(page, step.value, timeout);
+    return resolved?.candidate;
+  }
   const { locator, candidate } = await resolveStepLocator(page, snapshot, step, timeout);
   switch (step.action) {
     case "scroll_into_view": await scrollLocatorIntoView(page, locator, timeout); break;
-    case "wait_for_stable": await waitForElementStable(page, locator, step.value, timeout); break;
     case "assert_visible": await locator.waitFor({ state: "visible", timeout }); break;
     case "assert_in_viewport": await locator.waitFor({ state: "visible", timeout }); await waitForInViewport(page, locator, timeout); break;
     case "assert_enabled": if (!await locator.isEnabled({ timeout })) throw new Error("요소가 비활성 상태입니다."); break;
@@ -133,9 +143,8 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     return `스크롤 위치 ${state.scrollY}px (${ratio}%) · 스크롤 이벤트 ${state.events}회`;
   }
   if (step.action === "wait_for_stable") {
-    const candidate = locatorUsed ?? step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
-    if (!candidate) return undefined;
-    return `안정화된 값: ${sanitizeText(await resolveLocator(page, candidate).innerText(), 500)}`;
+    if (!locatorUsed) return "페이지 콘텐츠 안정화 확인";
+    return `안정화된 값: ${sanitizeText(await resolveLocator(page, locatorUsed).innerText(), 500)}`;
   }
   if (step.action === "assert_in_viewport" || step.action === "scroll_into_view") {
     const candidate = locatorUsed ?? step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates.find((item) => item.unique) : undefined);
@@ -176,7 +185,14 @@ async function resolveStepLocator(page: Page, snapshot: PageSnapshot, step: Gene
         const locator = resolveLocator(page, candidate);
         const count = await locator.count();
         if (count === 1) return { locator, candidate };
-        if (count > 1) ambiguous = true;
+        if (count > 1) {
+          const visibleIndexes: number[] = [];
+          for (let index = 0; index < count; index += 1) {
+            if (await locator.nth(index).isVisible().catch(() => false)) visibleIndexes.push(index);
+          }
+          if (visibleIndexes.length === 1) return { locator: locator.nth(visibleIndexes[0]!), candidate };
+          if (visibleIndexes.length > 1) ambiguous = true;
+        }
       } catch { /* 다음 후보를 확인합니다. */ }
     }
     await page.waitForTimeout(75);
@@ -252,6 +268,25 @@ async function waitForElementStable(page: Page, locator: import("playwright").Lo
     await page.waitForTimeout(75);
   }
   throw new AppError("TEST_EXECUTION_TIMEOUT", "대상 요소의 값과 위치가 제한 시간 안에 안정되지 않았습니다.");
+}
+
+async function waitForPageContentStable(page: Page, value: string | undefined, timeout: number): Promise<void> {
+  const stableMs = value?.trim() ? Number(value) : 300;
+  if (!Number.isFinite(stableMs) || stableMs < 100 || stableMs > 5000) throw new AppError("TEST_EXECUTION_FAILED", "안정 유지 시간은 100~5000ms 사이 숫자여야 합니다.");
+  const started = Date.now();
+  let previous = "";
+  let stableSince = Date.now();
+  while (Date.now() - started < timeout) {
+    const current = await page.evaluate(() => JSON.stringify({
+      text: document.body?.innerText.slice(0, 20000) || "",
+      height: document.documentElement.scrollHeight,
+      elements: document.getElementsByTagName("*").length
+    }));
+    if (current !== previous) { previous = current; stableSince = Date.now(); }
+    else if (Date.now() - stableSince >= stableMs) return;
+    await page.waitForTimeout(75);
+  }
+  throw new AppError("TEST_EXECUTION_TIMEOUT", "페이지 콘텐츠가 제한 시간 안에 안정되지 않았습니다.");
 }
 
 async function revealDynamicHeader(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {

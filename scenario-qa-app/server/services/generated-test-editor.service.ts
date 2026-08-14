@@ -24,21 +24,23 @@ export type UpdateGeneratedTestInput = z.infer<typeof updateGeneratedTestSchema>
 export type CreateGeneratedTestInput = z.infer<typeof createGeneratedTestSchema>;
 
 const noElementActions = new Set<GeneratedTestAction>(["goto", "scroll_to_ratio", "scroll_by", "assert_url", "assert_title"]);
+const optionalElementActions = new Set<GeneratedTestAction>(["wait_for_stable"]);
 
 export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: PageSnapshot, input: UpdateGeneratedTestInput): GeneratedTestScenario {
   const elements = new Map(snapshot.elements.map((element) => [element.id, element]));
   const steps = input.steps.map((step, index) => {
-    const needsElement = !noElementActions.has(step.action);
+    const needsElement = !noElementActions.has(step.action) && !optionalElementActions.has(step.action);
     validateDynamicStepValue(step, index);
     const element = step.elementId ? elements.get(step.elementId) : undefined;
+    if (step.elementId && !element) throw new Error(`단계 ${index + 1}의 대상 요소를 찾을 수 없습니다.`);
     if (needsElement && !element) throw new Error(`단계 ${index + 1}의 대상 요소를 선택해 주세요.`);
     const locator = element?.locatorCandidates.find((candidate) => candidate.unique);
-    if (needsElement && !locator) throw new Error(`단계 ${index + 1}의 대상 요소에 고유 locator가 없습니다.`);
+    if ((needsElement || element) && !locator) throw new Error(`단계 ${index + 1}의 대상 요소에 고유 locator가 없습니다.`);
     return {
       id: createId("step"), order: index + 1, action: step.action, description: step.description,
-      elementId: needsElement ? element!.id : undefined, locator: needsElement ? locator : undefined,
+      elementId: element?.id, locator,
       value: step.value || undefined, expected: step.expected || undefined, timeoutMs: step.timeoutMs || undefined,
-      evidence: needsElement ? [`사용자 선택 요소: ${element!.id}`] : []
+      evidence: element ? [`사용자 선택 요소: ${element.id}`] : []
     };
   });
   const sourceElementIds = [...new Set(steps.map((step) => step.elementId).filter((value): value is string => Boolean(value)))];
