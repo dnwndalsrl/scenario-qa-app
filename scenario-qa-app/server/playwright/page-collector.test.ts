@@ -220,6 +220,26 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[2]?.currentUrl).toContain("/products");
   });
 
+  it("retries a non-unique snapshot candidate and selects its single visible match", async () => {
+    const productLink = snapshot.elements.find((element) => element.testId === "product-link")!;
+    const fallbackSnapshot = {
+      ...snapshot,
+      elements: snapshot.elements.map((element) => element.id === productLink.id
+        ? { ...element, locatorCandidates: [{ strategy: "text" as const, value: "Product", score: 60, unique: false }] }
+        : element)
+    };
+    const scenario = makeScenario("visible-snapshot-fallback", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "click", description: "표시된 Product 링크 클릭", elementId: productLink.id },
+      { action: "assert_url", description: "상품 페이지 이동 확인", expected: "/products" }
+    ]);
+
+    const [run] = await executeGeneratedTests(fallbackSnapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.currentUrl).toContain("/products");
+  });
+
   it("falls back to page-level stability when no target element is supplied", async () => {
     const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading")!;
     const scenario = makeScenario("page-stability-fallback", [
