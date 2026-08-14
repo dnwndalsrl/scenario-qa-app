@@ -240,6 +240,19 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[2]?.currentUrl).toContain("/products");
   });
 
+  it("clicks an equivalent overlay link when duplicated card headings share one destination", async () => {
+    const scenario = makeScenario("equivalent-card-links", [
+      { action: "goto", description: "페이지 접속" },
+      { action: "click", description: "Smart-Farm 시스템 카드 클릭", locator: { strategy: "text", value: "Smart-Farm 시스템", score: 60, unique: false } },
+      { action: "assert_url", description: "Smart-Farm 상세 이동 확인", expected: "/smartfarm/system/" }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.currentUrl).toContain("/smartfarm/system/");
+  });
+
   it("falls back to page-level stability when no target element is supplied", async () => {
     const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading")!;
     const scenario = makeScenario("page-stability-fallback", [
