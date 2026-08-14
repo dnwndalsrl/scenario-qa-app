@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GeneratedTestScenario, PageSnapshot } from "../../shared/types/analysis";
 import { collectPage } from "./page-collector";
-import { executeGeneratedTests } from "./test-executor";
+import { executeGeneratedTests, readStableActualValue } from "./test-executor";
 
 const fixtureUrl = "http://127.0.0.1:3011";
 const storageRoot = path.resolve(process.cwd(), "test/.tmp-analysis-storage");
@@ -233,6 +233,13 @@ describe("Playwright 페이지 수집과 실행", () => {
 
     expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
     expect(run?.stepResults[2]?.actual).toBe("페이지 콘텐츠 안정화 확인");
+  });
+
+  it("keeps a successful stability wait when its dynamic target disappears before result recording", async () => {
+    const page = { getByTestId: () => ({ innerText: () => Promise.reject(new Error("detached")) }) } as never;
+    const actual = await readStableActualValue(page, { strategy: "test_id", value: "removed-target", score: 100, unique: true });
+
+    expect(actual).toBe("페이지 콘텐츠 안정화 확인");
   });
 });
 
