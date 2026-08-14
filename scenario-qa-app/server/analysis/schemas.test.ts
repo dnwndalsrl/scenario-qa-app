@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { aiPageAnalysisResponseSchema, generatedTestResponseSchema } from "../../shared/schemas/analysis";
 import { PAGE_ANALYSIS_SYSTEM_PROMPT } from "./prompts/page-analysis.prompt";
-import { validateGeneratedTestPayload } from "./services/ai-test-generation.service";
+import { buildFallbackTests, validateGeneratedTestPayload } from "./services/ai-test-generation.service";
 import type { PageSnapshot } from "../../shared/types/analysis";
 
 describe("AI 구조화 출력 검증", () => {
@@ -50,5 +50,13 @@ describe("AI 구조화 출력 검증", () => {
     expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-link"], steps: [{ ...step, elementId: "element-link" }] }] }, snapshot)[0]?.steps[0]?.elementId).toBe("element-link");
     expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-heading"], steps: [{ ...step, elementId: "element-heading", locator: null }] }] }, snapshot)[0]?.steps[0]).toMatchObject({ elementId: "element-link", locator: hrefLocator });
     expect(() => validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-orphan"], steps: [{ ...step, elementId: "element-orphan", locator: null }] }] }, snapshot)).toThrow();
+  });
+  it("AI 검증 실패 시 실제 내부 링크를 사용하는 안전한 대체 시나리오를 만든다", () => {
+    const hrefLocator = { strategy: "css" as const, value: 'a[href$="/smartfarm/system/"]', score: 85, unique: false };
+    const snapshot = { id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com/", finalUrl: "https://example.com/", title: "Example", viewport: { width: 1440, height: 900 }, headings: [], forms: [], internalLinks: [], consoleMessages: [], networkIssues: [], collectedAt: new Date().toISOString(), elements: [
+      { id: "element-link", type: "link", tagName: "a", role: "link", accessibleName: "Smart-Farm 시스템", href: "https://example.com/smartfarm/system/", visible: true, locatorCandidates: [hrefLocator], safetyHints: [] }
+    ] } as PageSnapshot;
+
+    expect(buildFallbackTests(snapshot)[0]).toMatchObject({ safetyLevel: "safe", sourceElementIds: ["element-link"], steps: [{ action: "wait_for_stable" }, { action: "click", elementId: "element-link", locator: hrefLocator }] });
   });
 });
