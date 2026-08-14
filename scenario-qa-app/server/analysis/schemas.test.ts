@@ -37,16 +37,18 @@ describe("AI 구조화 출력 검증", () => {
     const [scenario] = validateGeneratedTestPayload({ scenarios: [{ ...base, steps: [{ order: 1, action: "wait_for_stable", description: "페이지 안정화", elementId: null, locator: null, value: "300", expected: null, timeoutMs: null, evidence: [] }] }] }, snapshot);
     expect(scenario?.steps[0]).toMatchObject({ action: "wait_for_stable", elementId: undefined, value: "300" });
   });
-  it("동일 href 복제 링크 locator는 클릭에 허용하고 비상호작용 heading 클릭은 거부한다", () => {
+  it("heading 클릭을 동일 이름의 실제 href 링크로 보정하고 대체 링크가 없으면 거부한다", () => {
     const hrefLocator = { strategy: "css" as const, value: 'a[href$="/smartfarm/system/"]', score: 85, unique: false };
     const snapshot = { id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com/", finalUrl: "https://example.com/", title: "Example", viewport: { width: 1440, height: 900 }, headings: [], forms: [], internalLinks: [], consoleMessages: [], networkIssues: [], collectedAt: new Date().toISOString(), elements: [
-      { id: "element-link", type: "link", tagName: "a", role: "link", href: "https://example.com/smartfarm/system/", visible: true, locatorCandidates: [hrefLocator], safetyHints: [] },
-      { id: "element-heading", type: "heading", tagName: "h3", role: "heading", text: "Smart-Farm 시스템", visible: true, locatorCandidates: [{ strategy: "text", value: "Smart-Farm 시스템", score: 60, unique: true }], safetyHints: [] }
+      { id: "element-link", type: "link", tagName: "a", role: "link", accessibleName: "Smart-Farm 시스템", href: "https://example.com/smartfarm/system/", visible: true, locatorCandidates: [hrefLocator], safetyHints: [] },
+      { id: "element-heading", type: "heading", tagName: "h3", role: "heading", text: "Smart-Farm 시스템", visible: true, locatorCandidates: [{ strategy: "text", value: "Smart-Farm 시스템", score: 60, unique: true }], safetyHints: [] },
+      { id: "element-orphan", type: "heading", tagName: "h3", role: "heading", text: "연결 없는 제목", visible: true, locatorCandidates: [{ strategy: "text", value: "연결 없는 제목", score: 60, unique: true }], safetyHints: [] }
     ] } as PageSnapshot;
     const base = { title: "카드 이동", description: "설명", purpose: "내부 이동", category: "navigation" as const, safetyLevel: "safe" as const, confidence: .8, autoExecutable: true, requirementIds: [] };
     const step = { order: 1, action: "click" as const, description: "카드 클릭", locator: hrefLocator, value: null, expected: null, timeoutMs: null, evidence: [] };
 
     expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-link"], steps: [{ ...step, elementId: "element-link" }] }] }, snapshot)[0]?.steps[0]?.elementId).toBe("element-link");
-    expect(() => validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-heading"], steps: [{ ...step, elementId: "element-heading", locator: null }] }] }, snapshot)).toThrow();
+    expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-heading"], steps: [{ ...step, elementId: "element-heading", locator: null }] }] }, snapshot)[0]?.steps[0]).toMatchObject({ elementId: "element-link", locator: hrefLocator });
+    expect(() => validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-orphan"], steps: [{ ...step, elementId: "element-orphan", locator: null }] }] }, snapshot)).toThrow();
   });
 });
