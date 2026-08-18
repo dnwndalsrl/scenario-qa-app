@@ -385,6 +385,7 @@ async function clickWhenActionable(page: Page, locator: import("playwright").Loc
     }
 
     try {
+      if (await clickVerifiedHitPoint(page, locator)) return;
       const actionTimeout = Math.min(1800, Math.max(1, timeout - (Date.now() - started)));
       await locator.click({ trial: true, timeout: Math.min(600, actionTimeout) });
       await locator.click({ timeout: actionTimeout });
