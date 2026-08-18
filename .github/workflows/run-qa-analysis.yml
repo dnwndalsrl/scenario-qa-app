@@ -64,7 +64,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --include=optional
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Validate input and secrets
         run: npm run qa:validate-input -- --analysis-id=${{ inputs.analysis_id }}
       - name: Run QA analysis
