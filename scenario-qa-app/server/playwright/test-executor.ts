@@ -120,9 +120,7 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     case "click": {
       await resetScrollTracking(page);
       const actionable = await resolveActionableLocator(locator);
-      await revealDynamicHeader(page, actionable, timeout);
-      try { await actionable.click({ timeout }); }
-      catch (error) { throw new AppError("TEST_TARGET_NOT_ACTIONABLE", undefined, 400, error instanceof Error ? error.message : String(error)); }
+      await clickWhenActionable(page, actionable, timeout);
       break;
     }
     case "fill": await locator.fill(step.value || "qa-read-only-check", { timeout }); break;
@@ -357,6 +355,46 @@ async function revealDynamicHeader(page: Page, locator: import("playwright").Loc
     await page.waitForTimeout(100);
   }
   throw new AppError("TEST_DYNAMIC_HEADER_HIDDEN");
+}
+
+async function clickWhenActionable(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {
+  const started = Date.now();
+  const scroll = await page.evaluate(() => ({
+    current: window.scrollY,
+    maximum: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+    width: window.innerWidth,
+    height: window.innerHeight
+  }));
+  const positions = [scroll.current, scroll.maximum * 0.25, scroll.maximum * 0.5, 0]
+    .map((value) => Math.round(value))
+    .filter((value, index, values) => values.indexOf(value) === index);
+  let lastError: unknown;
+
+  for (const position of positions) {
+    const remaining = timeout - (Date.now() - started);
+    if (remaining <= 0) break;
+    await page.mouse.move(Math.max(0, scroll.width - 2), Math.max(0, scroll.height - 2));
+    await page.evaluate((value) => window.scrollTo(0, value), position);
+    await waitForPageScrollStable(page, Math.min(500, remaining)).catch(() => undefined);
+    try {
+      await revealDynamicHeader(page, locator, Math.min(800, Math.max(1, timeout - (Date.now() - started))));
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== "TEST_DYNAMIC_HEADER_HIDDEN") throw error;
+      lastError = error;
+      continue;
+    }
+
+    try {
+      const actionTimeout = Math.min(1800, Math.max(1, timeout - (Date.now() - started)));
+      await locator.click({ trial: true, timeout: Math.min(600, actionTimeout) });
+      await locator.click({ timeout: actionTimeout });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new AppError("TEST_TARGET_NOT_ACTIONABLE", undefined, 400, lastError instanceof Error ? lastError.message : String(lastError || "click target remained blocked"));
 }
 
 async function waitForInViewport(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {
