@@ -19,6 +19,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   TEST_LOCATOR_NOT_UNIQUE: "테스트 대상 요소를 하나로 특정하지 못했습니다.",
   TEST_DYNAMIC_HEADER_HIDDEN: "동적 헤더 안의 대상 요소가 화면에 나타나지 않았습니다.",
   TEST_TARGET_NOT_ACTIONABLE: "테스트 대상 요소가 표시되어 있지만 클릭할 수 없는 상태입니다.",
+  TEST_CLICK_OUTCOME_MISMATCH: "클릭 후 기대한 화면 변화가 확인되지 않았습니다.",
   TEST_EXECUTION_FAILED: "테스트 실행 중 오류가 발생했습니다.",
   TEST_EXECUTION_TIMEOUT: "테스트 실행 제한 시간을 초과했습니다.",
   STORAGE_WRITE_FAILED: "분석 결과를 저장하지 못했습니다.",

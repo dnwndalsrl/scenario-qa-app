@@ -47,7 +47,7 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       if (repairedStep.action === "scroll_to_ratio" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 100)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll ratio");
       if (repairedStep.action === "scroll_by" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < -10000 || numericValue > 10000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll distance");
       if (repairedStep.action === "wait_for_stable" && repairedStep.value?.trim() && (!Number.isFinite(numericValue) || numericValue < 100 || numericValue > 5000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid stability wait");
-      return { ...repairedStep, elementId: repairedStep.elementId ?? undefined, locator: repairedStep.locator ?? undefined, value: repairedStep.value ?? undefined, expected: repairedStep.expected ?? undefined, timeoutMs: repairedStep.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(repairedStep.evidence || []), ...(repairedStep.elementId ? [`근거 요소: ${repairedStep.elementId}`] : [])])] };
+      return { ...repairedStep, elementId: repairedStep.elementId ?? undefined, locator: repairedStep.locator ?? undefined, value: repairedStep.value ?? undefined, expected: inferredClickExpected(repairedStep.action, repairedStep.expected, element?.href, snapshot.finalUrl), timeoutMs: repairedStep.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(repairedStep.evidence || []), ...(repairedStep.elementId ? [`근거 요소: ${repairedStep.elementId}`] : [])])] };
     });
     const sourceElementIds = [...new Set([...scenario.sourceElementIds, ...steps.map((step) => step.elementId).filter((id): id is string => Boolean(id))])];
     return enforceSafety({ ...scenario, sourceElementIds, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
@@ -90,7 +90,7 @@ export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenari
       category: "navigation", safetyLevel: "safe", safetyReasons: [], confidence: .7, autoExecutable: true, sourceElementIds: [element.id], requirementIds: [],
       steps: [
         { id: createId("step"), order: 1, action: "wait_for_stable", description: "페이지가 안정될 때까지 대기", value: "300", evidence: [] },
-        { id: createId("step"), order: 2, action: "click", description: `${name} 링크 클릭`, elementId: element.id, locator, evidence: [`근거 요소: ${element.id}`] }
+        { id: createId("step"), order: 2, action: "click", description: `${name} 링크 클릭`, elementId: element.id, locator, expected: inferredClickExpected("click", undefined, element.href, snapshot.finalUrl), evidence: [`근거 요소: ${element.id}`] }
       ], generatedAt: new Date().toISOString()
     });
   });
@@ -115,4 +115,16 @@ function isMeaningfulInternalLink(href: string, pageUrl: string): boolean {
     return link.origin === page.origin && link.pathname !== "/" && (link.pathname !== page.pathname || link.search !== page.search);
   }
   catch { return false; }
+}
+
+function inferredClickExpected(action: string, expected: string | null | undefined, href: string | undefined, pageUrl: string): string | undefined {
+  if (expected?.trim() || action !== "click" || !href) return expected?.trim() || undefined;
+  try {
+    const destination = new URL(href, pageUrl);
+    const current = new URL(pageUrl);
+    const sameDocument = destination.origin === current.origin && destination.pathname.replace(/\/$/, "") === current.pathname.replace(/\/$/, "") && destination.search === current.search;
+    if (sameDocument && destination.hash) return `scroll:${destination.hash}`;
+    if (!sameDocument) return `url:${destination.href}`;
+  } catch { /* 검증할 수 없는 href는 기존 클릭 동작을 유지합니다. */ }
+  return undefined;
 }

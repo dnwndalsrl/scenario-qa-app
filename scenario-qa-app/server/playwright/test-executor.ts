@@ -6,6 +6,7 @@ import { assertRedirectAllowed } from "../security/url-validator";
 import { sanitizeText, sanitizeUrl } from "../security/sensitive-data";
 import { savePngArtifact } from "../storage/artifact-store";
 import { createId } from "../utils/id";
+import { inferClickOutcome, verifyClickOutcome } from "./click-outcome";
 import { resolveLocator } from "./locator-resolver";
 
 export async function executeGeneratedTests(snapshot: PageSnapshot, scenarios: GeneratedTestScenario[]): Promise<AutomatedTestRun[]> {
@@ -119,8 +120,11 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     case "assert_text": { const text = await locator.innerText({ timeout }); if (!text.includes(step.expected || "")) throw new Error(`예상 텍스트를 찾지 못했습니다: ${text}`); break; }
     case "click": {
       await resetScrollTracking(page);
+      const startedScrollY = await page.evaluate(() => window.scrollY);
+      const expectation = inferClickOutcome(step, step.elementId ? snapshot.elements.find((element) => element.id === step.elementId) : undefined, page.url());
       const actionable = await resolveActionableLocator(locator);
       await clickWhenActionable(page, actionable, timeout);
+      await verifyClickOutcome(page, expectation, startedScrollY, timeout);
       break;
     }
     case "fill": await locator.fill(step.value || "qa-read-only-check", { timeout }); break;
@@ -242,6 +246,7 @@ function classifyFailure(step: GeneratedTestStep, error: unknown): TestFailureKi
   if (error instanceof AppError) {
     if (error.code === "TEST_SAFETY_BLOCKED") return "safety_blocked";
     if (["TEST_LOCATOR_NOT_FOUND", "TEST_LOCATOR_NOT_UNIQUE", "TEST_DYNAMIC_HEADER_HIDDEN", "TEST_TARGET_NOT_ACTIONABLE"].includes(error.code)) return "automation_limit";
+    if (error.code === "TEST_CLICK_OUTCOME_MISMATCH") return "product_defect";
     if (["TEST_EXECUTION_FAILED", "TEST_EXECUTION_TIMEOUT"].includes(error.code)) return "environment_error";
   }
   if (step.action === "goto") return "environment_error";
