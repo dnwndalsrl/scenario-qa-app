@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AnalysisDetail, SiteAnalysis, SiteAnalysisOptions } from "../../shared/types/analysis";
+import { buildCurrentSummary } from "../analysis/services/analysis-summary.service";
 
 const activeStatuses = new Set(["queued", "dispatching", "dispatched", "running", "cancel_requested"]);
 
@@ -38,6 +39,10 @@ export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: 
   const payload = (summaryResult.data?.payload || {}) as Partial<AnalysisDetail>;
   const generatedTests = (testsResult.data || []).map((item: any) => item.payload);
   const testRuns = (runsResult.data || []).map((item: any) => item.payload);
+  const storedSummary = row.summary || payload.analysis?.summary;
+  const currentSummary = row.mode === "single_page" && payload.snapshot && payload.pageAnalysis
+    ? buildCurrentSummary(payload.snapshot, payload.pageAnalysis, generatedTests, testRuns)
+    : storedSummary;
   const pages = (pagesResult.data || []).map((item: any) => {
     const page = item.payload as AnalysisDetail["pages"][number];
     return {
@@ -47,7 +52,7 @@ export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: 
     };
   });
   return {
-    analysis: { ...rowToAnalysis(row), ...(payload.analysis || {}), id: row.id, status: rowToAnalysis(row).status, progress: row.progress, currentMessage: row.current_message, error: row.error || payload.analysis?.error, summary: row.summary || payload.analysis?.summary },
+    analysis: { ...rowToAnalysis(row), ...(payload.analysis || {}), id: row.id, status: rowToAnalysis(row).status, progress: row.progress, currentMessage: row.current_message, error: row.error || payload.analysis?.error, summary: currentSummary },
     snapshot: payload.snapshot, pageAnalysis: payload.pageAnalysis,
     generatedTests,
     testRuns,

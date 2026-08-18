@@ -1,4 +1,5 @@
 import type { AiPageAnalysis, AnalysisSummary, AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../../../shared/types/analysis";
+import { latestTestRuns } from "../../../shared/utils/test-run-history";
 
 export function buildSummary(snapshot: PageSnapshot, pageAnalysis: AiPageAnalysis, tests: GeneratedTestScenario[], runs: AutomatedTestRun[]): AnalysisSummary {
   const successCount = runs.filter((run) => run.status === "success").length;
@@ -15,4 +16,8 @@ export function buildSummary(snapshot: PageSnapshot, pageAnalysis: AiPageAnalysi
     consoleErrorCount, networkIssueCount, criticalIssueCount, warningCount,
     overallStatus: errorCount > 0 ? "analysis_error" : criticalIssueCount > 0 ? "failed" : warningCount > 0 || blockedCount > 0 ? "passed_with_warnings" : "passed"
   };
+}
+
+export function buildCurrentSummary(snapshot: PageSnapshot, pageAnalysis: AiPageAnalysis, tests: GeneratedTestScenario[], runs: AutomatedTestRun[]): AnalysisSummary {
+  return buildSummary(snapshot, pageAnalysis, tests, latestTestRuns(runs));
 }

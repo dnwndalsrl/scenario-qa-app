@@ -144,6 +144,11 @@ h3 { margin: 0; font-size: 17px; }
 .result-steps li>div>strong { color:var(--ink); font-size:13px; line-height:1.55; }
 .result-steps li p { margin:6px 0 0; line-height:1.55; }
 .result-card__error { margin:16px 0 0 52px; padding:12px 14px; border-radius:10px; background:#feeceb; color:var(--danger); font-size:13px; line-height:1.55; }
+.run-group + .run-group { margin-top:30px; padding-top:26px; border-top:1px solid #d8e1ed; }
+.run-group__head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 14px; }
+.run-group__head h3 { margin:0; font-size:17px; }
+.run-group__head p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+.run-group--previous .result-card { background:#f8fafc; box-shadow:none; }
 .scenario-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
 .scenario-spacer { flex: 1; }
 .scenario-button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); font-weight: 700; cursor: pointer; }
