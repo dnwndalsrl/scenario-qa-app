@@ -23,11 +23,13 @@ describe("Playwright 페이지 수집과 실행", () => {
   it("visible 요소, 접근성 정보, locator 유일성, 문제와 스크린샷을 수집한다", () => {
     expect(snapshot.title).toBe("Probe QA Fixture"); expect(snapshot.elements.length).toBeGreaterThan(10);
     expect(snapshot.elements.some((element) => element.text === "숨겨진 버튼")).toBe(false);
+    expect(snapshot.elements.some((element) => element.testId === "ancestor-hidden-link")).toBe(false);
+    expect(snapshot.elements.find((element) => element.testId === "covered-link")?.actionable).toBe(false);
     expect(JSON.stringify(snapshot)).not.toContain("never-collect-this");
     const info = snapshot.elements.find((element) => element.testId === "info-button");
     expect(info?.locatorCandidates[0]).toMatchObject({ strategy: "test_id", value: "info-button", unique: true });
     const overlayLink = snapshot.elements.find((element) => element.href?.endsWith("/smartfarm/system/"));
-    expect(overlayLink).toMatchObject({ type: "link", accessibleName: "Smart-Farm 시스템" });
+    expect(overlayLink).toMatchObject({ type: "link", accessibleName: "Smart-Farm 시스템", actionable: true });
     expect(overlayLink?.locatorCandidates).toContainEqual(expect.objectContaining({ strategy: "css", value: 'a[href$="/smartfarm/system/"]' }));
     expect(snapshot.screenshotArtifactId).toMatch(/^artifact-/);
     expect(snapshot.consoleMessages.some((item) => item.type === "warning")).toBe(true);

@@ -14,7 +14,7 @@ interface RawElement {
   href?: string; inputType?: string; enabled?: boolean; required?: boolean; readonly?: boolean; id?: string; classes?: string[];
   headingLevel?: number; formKey?: string; method?: string; action?: string; alt?: string; noFollow?: boolean; download?: boolean;
   region?: "header" | "main" | "footer" | "other";
-  domPath?: string; inViewport?: boolean;
+  domPath?: string; inViewport?: boolean; actionable?: boolean;
 }
 interface ObservedRawElement extends RawElement { observedStates: PageObservationState[]; inViewportStates: PageObservationState[]; }
 
@@ -101,7 +101,7 @@ async function collectPageInContext(context: BrowserContext, analysisId: string,
       elements.push({
         id: `element-${index + 1}`, type: elementType(raw), tagName: raw.tagName, role: raw.role, accessibleName: raw.accessibleName,
         label: raw.label, text: raw.text, placeholder: raw.placeholder, testId: raw.testId, href: raw.href ? sanitizeUrl(raw.href) : undefined,
-        inputType: raw.inputType, visible: true, enabled: raw.enabled, required: raw.required, readonly: raw.readonly,
+        inputType: raw.inputType, visible: true, enabled: raw.enabled, required: raw.required, readonly: raw.readonly, actionable: raw.actionable,
         locatorCandidates: candidates, safetyHints: RISK_WORDS.test(riskSource) ? ["상태 변경 가능성이 있는 문구가 발견됨"] : [],
         observedStates: raw.observedStates, inViewportStates: raw.inViewportStates
       });
@@ -149,6 +149,7 @@ async function collectPageStates(page: Page, maxElements: number, maxTotalText: 
       if (existing) {
         if (!existing.observedStates.includes(step.state)) existing.observedStates.push(step.state);
         if (raw.inViewport && !existing.inViewportStates.includes(step.state)) existing.inViewportStates.push(step.state);
+        if (raw.actionable) existing.actionable = true;
       } else if (merged.size < maxElements) {
         merged.set(key, { ...raw, observedStates: [step.state], inViewportStates: raw.inViewport ? [step.state] : [] });
       }
@@ -167,8 +168,24 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
     // helper is unavailable inside Playwright's isolated page context.
     const helpers = {
       visible(node: HTMLElement) {
-        const style = getComputedStyle(node); const rect = node.getBoundingClientRect();
-        return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: HTMLElement | null = node;
+        while (current) {
+          const style = getComputedStyle(current);
+          if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
+          current = current.parentElement;
+        }
+        return true;
+      },
+      actionable(node: HTMLElement) {
+        if (!node.matches("a[href],button,input,textarea,select,[role='link'],[role='button'],[role='tab']")) return undefined;
+        const rect = node.getBoundingClientRect();
+        const left = Math.max(0, rect.left); const right = Math.min(innerWidth, rect.right);
+        const top = Math.max(0, rect.top); const bottom = Math.min(innerHeight, rect.bottom);
+        if (right <= left || bottom <= top || getComputedStyle(node).pointerEvents === "none") return false;
+        const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+        return Boolean(hit && (hit === node || node.contains(hit)));
       },
       clean(value: string | null | undefined, max = 300) {
         const normalized = (value || "").replace(/\s+/g, " ").trim();
@@ -206,7 +223,8 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
         noFollow: node.tagName === "A" ? (node.getAttribute("rel") || "").split(/\s+/).includes("nofollow") : undefined,
         download: node.tagName === "A" ? node.hasAttribute("download") : undefined,
         region: node.closest("header") ? "header" : node.closest("main") ? "main" : node.closest("footer") ? "footer" : "other",
-        domPath: helpers.path(node), inViewport: rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth
+        domPath: helpers.path(node), inViewport: rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth,
+        actionable: helpers.actionable(node)
       };
     });
   }, { maxElements, maxTotalText });

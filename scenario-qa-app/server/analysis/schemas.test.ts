@@ -41,6 +41,7 @@ describe("AI 구조화 출력 검증", () => {
     const hrefLocator = { strategy: "css" as const, value: 'a[href$="/smartfarm/system/"]', score: 85, unique: false };
     const snapshot = { id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com/", finalUrl: "https://example.com/", title: "Example", viewport: { width: 1440, height: 900 }, headings: [], forms: [], internalLinks: [], consoleMessages: [], networkIssues: [], collectedAt: new Date().toISOString(), elements: [
       { id: "element-link", type: "link", tagName: "a", role: "link", accessibleName: "Smart-Farm 시스템", href: "https://example.com/smartfarm/system/", visible: true, locatorCandidates: [hrefLocator], safetyHints: [] },
+      { id: "element-covered", type: "link", tagName: "a", role: "link", accessibleName: "가려진 링크", href: "https://example.com/covered/", visible: true, actionable: false, locatorCandidates: [{ strategy: "role", value: "link::가려진 링크", score: 90, unique: true }], safetyHints: [] },
       { id: "element-heading", type: "heading", tagName: "h3", role: "heading", text: "Smart-Farm 시스템", visible: true, locatorCandidates: [{ strategy: "text", value: "Smart-Farm 시스템", score: 60, unique: true }], safetyHints: [] },
       { id: "element-orphan", type: "heading", tagName: "h3", role: "heading", text: "연결 없는 제목", visible: true, locatorCandidates: [{ strategy: "text", value: "연결 없는 제목", score: 60, unique: true }], safetyHints: [] }
     ] } as PageSnapshot;

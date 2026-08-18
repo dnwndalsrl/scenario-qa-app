@@ -15,7 +15,7 @@ export async function generateTestsWithAi(snapshot: PageSnapshot, analysis: AiPa
   const input = {
     page: { url: snapshot.finalUrl, title: snapshot.title, headings: snapshot.headings, pageType: analysis.pageType, purpose: analysis.pagePurpose },
     functions: analysis.primaryFunctions, opportunities: analysis.testOpportunities,
-    elements: snapshot.elements.map(({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates, safetyHints, observedStates, inViewportStates }) => ({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, locatorCandidates: locatorCandidates.slice(0, 3), safetyHints, observedStates, inViewportStates })),
+    elements: snapshot.elements.map(({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, actionable, locatorCandidates, safetyHints, observedStates, inViewportStates }) => ({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, actionable, locatorCandidates: locatorCandidates.slice(0, 3), safetyHints, observedStates, inViewportStates })),
     stateObservations: snapshot.stateObservations,
     requirements: document?.requirements || [],
     limits: { maxScenarios: config.maxGeneratedScenarios, maxStepsPerScenario: config.maxStepsPerScenario }, testMode: "read_only"
@@ -42,6 +42,7 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       const equivalentHrefClick = repairedStep.action === "click" && discoveredLocator?.strategy === "css" && discoveredLocator.value.includes("[href");
       if (repairedStep.locator && (!discoveredLocator || !discoveredLocator.unique && !equivalentHrefClick)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not executable");
       if (repairedStep.action === "click" && element && !isInteractive(element)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Click target is not interactive");
+      if (repairedStep.action === "click" && element?.actionable === false) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Click target did not pass actionability preflight");
       const numericValue = Number(repairedStep.value);
       if (repairedStep.action === "scroll_to_ratio" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 100)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll ratio");
       if (repairedStep.action === "scroll_by" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < -10000 || numericValue > 10000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll distance");
@@ -56,9 +57,9 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
 function repairClickTarget<T extends GeneratedPayload["scenarios"][number]["steps"][number]>(step: T, snapshot: PageSnapshot): T {
   if (step.action !== "click" || !step.elementId) return step;
   const target = snapshot.elements.find((element) => element.id === step.elementId);
-  if (!target || isInteractive(target)) return step;
+  if (!target || isInteractive(target) && target.actionable !== false) return step;
   const targetName = normalizedName(target);
-  const replacement = targetName && snapshot.elements.find((element) => isInteractive(element) && normalizedName(element) === targetName && executableClickLocator(element));
+  const replacement = targetName && snapshot.elements.find((element) => isInteractive(element) && element.actionable !== false && normalizedName(element) === targetName && executableClickLocator(element));
   const locator = replacement && executableClickLocator(replacement);
   return replacement && locator ? { ...step, elementId: replacement.id, locator } : step;
 }
@@ -78,7 +79,7 @@ function isInteractive(element: PageSnapshot["elements"][number]): boolean {
 
 export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenario[] {
   const config = getAnalysisConfig();
-  const internalLinks = snapshot.elements.filter((element) => element.href && isInteractive(element) && executableClickLocator(element) && isMeaningfulInternalLink(element.href, snapshot.finalUrl));
+  const internalLinks = snapshot.elements.filter((element) => element.href && element.actionable !== false && isInteractive(element) && executableClickLocator(element) && isMeaningfulInternalLink(element.href, snapshot.finalUrl));
   const visibleElements = snapshot.elements.filter((element) => element.visible && element.locatorCandidates.some((candidate) => candidate.unique));
   const linkScenarios = internalLinks.slice(0, config.maxGeneratedScenarios).map((element) => {
     const locator = executableClickLocator(element)!;
