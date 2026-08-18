@@ -391,10 +391,30 @@ async function clickWhenActionable(page: Page, locator: import("playwright").Loc
       return;
     } catch (error) {
       lastError = error;
+      if (await clickVerifiedHitPoint(page, locator)) return;
     }
   }
 
   throw new AppError("TEST_TARGET_NOT_ACTIONABLE", undefined, 400, lastError instanceof Error ? lastError.message : String(lastError || "click target remained blocked"));
+}
+
+async function clickVerifiedHitPoint(page: Page, locator: import("playwright").Locator): Promise<boolean> {
+  const point = await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    if (style.pointerEvents === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 || element.getAttribute("aria-disabled") === "true") return undefined;
+    if (element instanceof HTMLButtonElement && element.disabled) return undefined;
+    const rect = element.getBoundingClientRect();
+    const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2));
+    const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2));
+    if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) return undefined;
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || !(hit === element || element.contains(hit))) return undefined;
+    return { x, y };
+  }).catch(() => undefined);
+  if (!point) return false;
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(100);
+  return true;
 }
 
 async function waitForInViewport(page: Page, locator: import("playwright").Locator, timeout: number): Promise<void> {
