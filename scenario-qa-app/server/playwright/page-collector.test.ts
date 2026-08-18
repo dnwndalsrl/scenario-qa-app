@@ -181,6 +181,21 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[4]?.currentUrl).toContain("/products");
   });
 
+  it("rechecks click actionability across scroll states when a fixed-header link is transiently covered", async () => {
+    const link = snapshot.elements.find((element) => element.testId === "transient-header-link")!;
+    const scenario = makeScenario("transient-header-cover", [
+      { action: "wait_for_stable", description: "동적 헤더 위치 안정화", elementId: link.id, locator: link.locatorCandidates.find((item) => item.unique)!, value: "150" },
+      { action: "click", description: "Dr. AG 링크 클릭", elementId: link.id, locator: link.locatorCandidates.find((item) => item.unique)! },
+      { action: "assert_url", description: "회사 소개 이동 확인", expected: "/about" }
+    ]);
+
+    expect(link.actionable).toBe(true);
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[2]?.currentUrl).toContain("/about");
+  });
+
   it("reproduces a lazy-loaded counter state and waits for its final value", async () => {
     const counter = snapshot.elements.find((element) => element.testId === "counter-value")!;
     const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading")!;
