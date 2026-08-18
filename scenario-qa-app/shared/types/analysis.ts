@@ -78,7 +78,7 @@ export interface LocatorCandidate { strategy: LocatorStrategy; value: string; sc
 export interface DiscoveredElement {
   id: string; type: DiscoveredElementType; tagName: string; role?: string; accessibleName?: string; label?: string; text?: string;
   placeholder?: string; testId?: string; href?: string; inputType?: string; visible: boolean; enabled?: boolean; required?: boolean;
-  readonly?: boolean; locatorCandidates: LocatorCandidate[]; safetyHints: string[];
+  readonly?: boolean; actionable?: boolean; locatorCandidates: LocatorCandidate[]; safetyHints: string[];
   observedStates?: PageObservationState[]; inViewportStates?: PageObservationState[];
 }
 export interface PageStateObservation { state: PageObservationState; scrollY: number; documentHeight: number; inViewportElementCount: number; }
