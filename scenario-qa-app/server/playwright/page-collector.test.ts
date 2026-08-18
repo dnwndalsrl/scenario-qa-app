@@ -196,6 +196,19 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[2]?.currentUrl).toContain("/about");
   });
 
+  it("uses a verified pointer hit when a moving menu cannot satisfy locator stability", async () => {
+    const link = snapshot.elements.find((element) => element.testId === "moving-header-link")!;
+    const scenario = makeScenario("moving-header-link", [
+      { action: "click", description: "움직이는 메뉴 클릭", elementId: link.id, locator: link.locatorCandidates.find((item) => item.unique)!, timeoutMs: 2500 },
+      { action: "assert_url", description: "회사 소개 이동 확인", expected: "/about" }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[1]?.currentUrl).toContain("/about");
+  });
+
   it("reproduces a lazy-loaded counter state and waits for its final value", async () => {
     const counter = snapshot.elements.find((element) => element.testId === "counter-value")!;
     const lazyHeading = snapshot.elements.find((element) => element.testId === "lazy-heading")!;
