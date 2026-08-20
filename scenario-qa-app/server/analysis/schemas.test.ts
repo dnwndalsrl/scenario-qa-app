@@ -48,8 +48,8 @@ describe("AI 구조화 출력 검증", () => {
     const base = { title: "카드 이동", description: "설명", purpose: "내부 이동", category: "navigation" as const, safetyLevel: "safe" as const, confidence: .8, autoExecutable: true, requirementIds: [] };
     const step = { order: 1, action: "click" as const, description: "카드 클릭", locator: hrefLocator, value: null, expected: null, timeoutMs: null, evidence: [] };
 
-    expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-link"], steps: [{ ...step, elementId: "element-link" }] }] }, snapshot)[0]?.steps[0]).toMatchObject({ elementId: "element-link", expected: "url:https://example.com/smartfarm/system/" });
-    expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-heading"], steps: [{ ...step, elementId: "element-heading", locator: null }] }] }, snapshot)[0]?.steps[0]).toMatchObject({ elementId: "element-link", locator: hrefLocator, expected: "url:https://example.com/smartfarm/system/" });
+    expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-link"], steps: [{ ...step, elementId: "element-link" }] }] }, snapshot)[0]?.steps[0]).toMatchObject({ elementId: "element-link", expected: "url-prefix:https://example.com/smartfarm/system/" });
+    expect(validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-heading"], steps: [{ ...step, elementId: "element-heading", locator: null }] }] }, snapshot)[0]?.steps[0]).toMatchObject({ elementId: "element-link", locator: hrefLocator, expected: "url-prefix:https://example.com/smartfarm/system/" });
     expect(() => validateGeneratedTestPayload({ scenarios: [{ ...base, sourceElementIds: ["element-orphan"], steps: [{ ...step, elementId: "element-orphan", locator: null }] }] }, snapshot)).toThrow();
   });
   it("AI 검증 실패 시 실제 내부 링크를 사용하는 안전한 대체 시나리오를 만든다", () => {
@@ -61,6 +61,6 @@ describe("AI 구조화 출력 검증", () => {
     ] } as PageSnapshot;
 
     expect(buildFallbackTests(snapshot)).toHaveLength(1);
-    expect(buildFallbackTests(snapshot)[0]).toMatchObject({ safetyLevel: "safe", sourceElementIds: ["element-link"], steps: [{ action: "wait_for_stable" }, { action: "click", elementId: "element-link", locator: hrefLocator, expected: "url:https://example.com/smartfarm/system/" }] });
+    expect(buildFallbackTests(snapshot)[0]).toMatchObject({ safetyLevel: "safe", sourceElementIds: ["element-link"], steps: [{ action: "wait_for_stable" }, { action: "click", elementId: "element-link", locator: hrefLocator, expected: "url-prefix:https://example.com/smartfarm/system/" }] });
   });
 });

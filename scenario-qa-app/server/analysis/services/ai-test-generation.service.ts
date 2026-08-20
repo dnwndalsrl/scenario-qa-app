@@ -124,7 +124,7 @@ function inferredClickExpected(action: string, expected: string | null | undefin
     const current = new URL(pageUrl);
     const sameDocument = destination.origin === current.origin && destination.pathname.replace(/\/$/, "") === current.pathname.replace(/\/$/, "") && destination.search === current.search;
     if (sameDocument && destination.hash) return `scroll:${destination.hash}`;
-    if (!sameDocument) return `url:${destination.href}`;
+    if (!sameDocument) return `url-prefix:${destination.href}`;
   } catch { /* 검증할 수 없는 href는 기존 클릭 동작을 유지합니다. */ }
   return undefined;
 }
