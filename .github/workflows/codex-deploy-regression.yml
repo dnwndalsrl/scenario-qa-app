@@ -20,7 +20,7 @@ jobs:
       - name: Apply verified changes
         run: |
           printf '%s' "$PATCH_B64" | base64 --decode | gzip --decompress > /tmp/change.patch
-          git apply --index /tmp/change.patch
+          git apply --index --exclude=.github/workflows/production-regression.yml /tmp/change.patch
           git diff --cached --check
       - uses: actions/setup-node@v4
         with:
