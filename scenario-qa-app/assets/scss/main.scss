@@ -108,6 +108,11 @@ h3 { margin: 0; font-size: 17px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .metric { padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: white; }
 .metric strong { display: block; margin-top: 6px; font-size: 27px; }
+.regression-status { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-top:24px; padding:24px; }
+.regression-status h2 { margin:4px 0 8px; }
+.regression-status p { margin:0; color:var(--muted); }
+.regression-status__result { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; text-align:right; }
+.regression-status__result a { font-weight:700; }
 .progress-card { padding: 24px 26px 26px; }
 .progress-line { display: flex; justify-content: space-between; margin-bottom: 12px; }
 .progress-track { width: 100%; height: 12px; overflow: hidden; border-radius: 999px; background: #e5e9f0; }
@@ -187,6 +192,7 @@ h3 { margin: 0; font-size: 17px; }
 }
 @media (max-width: 680px) { .guide-steps { grid-template-columns:1fr; }.home-guide { padding:20px; }.analysis-form__head { align-items:flex-start; flex-direction:column; }.analysis-targets { padding:22px; }.analysis-form>.error-box { margin:0 22px 22px; } }
 @media (max-width: 680px) { .report-section { padding:20px; border-radius:18px; }.report-section>.section-head { align-items:flex-start; margin:-20px -20px 20px; padding:18px 20px; }.report-section>.section-head>div:first-child { padding-left:0; } }
+@media (max-width: 680px) { .regression-status { align-items:flex-start; flex-direction:column; }.regression-status__result { justify-content:flex-start; text-align:left; } }
 @media (max-width: 680px) { .scenario-card, .result-card { padding:18px; }.scenario-card>.test-meta, .scenario-card>.muted, .scenario-steps, .result-card__error { margin-left:0; padding-left:initial; }.scenario-card>.test-meta { padding-left:0; }.scenario-steps { padding:12px; }.scenario-steps li { grid-template-columns:22px 1fr; }.scenario-steps li span { grid-column:2; }.test-card__head { align-items:flex-start; }.scenario-card__identity { gap:10px; } }
 @media (max-width: 520px) { .grid--3, .summary-grid, .mini-grid { grid-template-columns: 1fr; }.url-control { flex-wrap:wrap; }.url-control__icon { display:none; }.url-control .primary-button { width:100%; }.document-upload { align-items:flex-start; flex-wrap:wrap; }.document-upload__action { width:100%; text-align:center; }.usage-summary { gap:16px; }.usage-summary span { padding-right:16px; } }
 @media (max-width: 620px) { .process-steps { grid-template-columns:1fr; } }

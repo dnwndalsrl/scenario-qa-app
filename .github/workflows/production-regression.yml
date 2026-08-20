@@ -1,0 +1,57 @@
+name: Production regression
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 21 * * *"
+  pull_request:
+    paths:
+      - "scenario-qa-app/server/playwright/**"
+      - "scenario-qa-app/server/regression/**"
+      - "scenario-qa-app/scripts/run-production-regression.ts"
+  push:
+    branches: [main]
+    paths:
+      - "scenario-qa-app/server/playwright/**"
+      - "scenario-qa-app/server/regression/**"
+      - "scenario-qa-app/scripts/run-production-regression.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-regression
+  cancel-in-progress: false
+
+jobs:
+  safe-live-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/scenario-test-runner/.playwright-browsers
+    defaults:
+      run:
+        working-directory: scenario-qa-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scenario-qa-app/package-lock.json
+      - name: Install dependencies
+        run: npm ci --include=optional
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Verify application
+        run: npm run check
+      - name: Run read-only production regression
+        run: npm run regression:production
+      - name: Upload regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-regression-${{ github.run_number }}
+          path: scenario-qa-app/.qa-regression/
+          if-no-files-found: error
+          retention-days: 14

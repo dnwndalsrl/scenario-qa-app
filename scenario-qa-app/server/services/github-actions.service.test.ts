@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { dispatchAnalysisWorkflow, dispatchApprovedTestsWorkflow, dispatchTestWorkflow, workflowDispatchUrl } from "./github-actions.service";
+import { dispatchAnalysisWorkflow, dispatchApprovedTestsWorkflow, dispatchTestWorkflow, latestWorkflowRun, workflowDispatchUrl } from "./github-actions.service";
 const config = { token: "secret-token", owner: "acme", repo: "probe", workflowId: "run-qa-analysis.yml", ref: "main" };
 
 describe("GitHub Actions dispatch", () => {
@@ -30,5 +30,10 @@ describe("GitHub Actions dispatch", () => {
   });
   it("rejects non UUID input before network access", async () => {
     const fetcher = vi.fn(); await expect(dispatchAnalysisWorkflow("../../secret", config, fetcher)).rejects.toThrow("Invalid analysis id"); expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("returns the latest regression workflow run without exposing credentials", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", run_number: 7, html_url: "https://github.com/acme/probe/actions/runs/7", created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:02:00Z", head_sha: "abc123" }] }), { status: 200 }));
+    await expect(latestWorkflowRun(config, "production-regression.yml", fetcher)).resolves.toEqual({ status: "completed", conclusion: "success", runNumber: 7, url: "https://github.com/acme/probe/actions/runs/7", createdAt: "2026-08-20T00:00:00Z", updatedAt: "2026-08-20T00:02:00Z", commitSha: "abc123" });
+    expect(fetcher).toHaveBeenCalledWith("https://api.github.com/repos/acme/probe/actions/workflows/production-regression.yml/runs?branch=main&per_page=1", expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer secret-token" }) }));
   });
 });
