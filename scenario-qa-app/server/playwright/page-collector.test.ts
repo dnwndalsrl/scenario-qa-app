@@ -181,6 +181,20 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[4]?.currentUrl).toContain("/products");
   });
 
+  it("requires a hash-link click to reach its expected section", async () => {
+    const link = snapshot.elements.find((element) => element.testId === "features-link")!;
+    const scenario = makeScenario("section-scroll", [
+      { action: "click", description: "기능 보기 클릭", elementId: link.id, locator: link.locatorCandidates.find((item) => item.unique)! },
+      { action: "assert_scroll", description: "기능 섹션 도달 확인", expected: "#features" }
+    ]);
+
+    const [run] = await executeGeneratedTests(snapshot, [scenario]);
+
+    expect(run?.status, JSON.stringify(run?.stepResults)).toBe("success");
+    expect(run?.stepResults[1]).toMatchObject({ expected: "#features", status: "success" });
+    expect(run?.stepResults[1]?.actual).toContain("스크롤 이벤트");
+  });
+
   it("rechecks click actionability across scroll states when a fixed-header link is transiently covered", async () => {
     const link = snapshot.elements.find((element) => element.testId === "transient-header-link")!;
     const scenario = makeScenario("transient-header-cover", [

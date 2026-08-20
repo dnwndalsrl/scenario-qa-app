@@ -1,4 +1,5 @@
-import type { AutomatedTestRun, GeneratedTestScenario } from "../../../../shared/types/analysis";
+import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../../../../shared/types/analysis";
+import { ensureScenarioAssertions } from "../../../analysis/services/scenario-verification.service";
 import { getOwnedAnalysis } from "../../../services/analysis-records.service";
 import { dispatchApprovedTestsWorkflow, githubConfigFromRuntime } from "../../../services/github-actions.service";
 import { requireUser } from "../../../services/supabase.service";
@@ -13,11 +14,20 @@ export default defineEventHandler(async (event) => {
   const { data: rows, error } = await admin.from("generated_tests").select("*").eq("analysis_id", analysisId).eq("safety_level", "safe").eq("auto_executable", true).order("created_at");
   if (error) throw createError({ statusCode: 500, statusMessage: "실행할 시나리오를 조회하지 못했습니다." });
   if (!rows?.length) throw createError({ statusCode: 409, statusMessage: "실행 가능한 안전한 시나리오가 없습니다." });
+  const { data: snapshotRows, error: snapshotError } = await admin.from("page_snapshots").select("page_id,payload").eq("analysis_id", analysisId);
+  if (snapshotError || !snapshotRows?.length) throw createError({ statusCode: 409, statusMessage: "테스트 대상 페이지 스냅샷을 찾을 수 없습니다." });
   const { data: active } = await admin.from("test_runs").select("id").eq("analysis_id", analysisId).in("status", ["pending", "running"]).limit(1);
   if (active?.length) throw createError({ statusCode: 409, statusMessage: "이미 실행 중인 테스트가 있습니다." });
 
-  const values = rows.map((row) => {
-    const scenario = row.payload as GeneratedTestScenario;
+  const executableScenarios = rows.map((row) => {
+    const stored = row.payload as GeneratedTestScenario;
+    const snapshot = snapshotRows.find((item) => item.page_id === (stored.pageId || null))?.payload as PageSnapshot | undefined;
+    if (!snapshot) throw createError({ statusCode: 409, statusMessage: "시나리오의 테스트 대상 페이지 스냅샷을 찾을 수 없습니다." });
+    return { row, scenario: ensureScenarioAssertions(stored, snapshot) };
+  }).filter(({ scenario }) => scenario.safetyLevel === "safe" && scenario.autoExecutable);
+  if (!executableScenarios.length) throw createError({ statusCode: 409, statusMessage: "예상 결과를 검증할 수 있는 안전한 시나리오가 없습니다." });
+
+  const values = executableScenarios.map(({ row, scenario }) => {
     const run: AutomatedTestRun = {
       id: createId("run"), analysisId, pageId: scenario.pageId, scenarioId: scenario.id, status: "pending",
       stepResults: [], consoleIssues: [], networkIssues: [], screenshotArtifactIds: [], trigger: "approved_run",

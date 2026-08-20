@@ -30,6 +30,7 @@ describe("production regression profile", () => {
       "production-regression-annual-volume-viewport", "production-regression-top-scroll"
     ]);
     expect(scenarios[3]?.steps[1]).toMatchObject({ action: "click", expected: "scroll" });
+    expect(scenarios.every((item) => item.steps.some((step) => step.action.startsWith("assert_")))).toBe(true);
   });
 
   it("separates product defects from inconclusive automation results", () => {

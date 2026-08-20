@@ -3,7 +3,7 @@ import type { GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from ".
 import { enforceSafety } from "../analysis/services/test-safety.service";
 import { createId } from "../utils/id";
 
-const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
+const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
 
 export const updateGeneratedTestSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -23,7 +23,7 @@ export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({ page
 export type UpdateGeneratedTestInput = z.infer<typeof updateGeneratedTestSchema>;
 export type CreateGeneratedTestInput = z.infer<typeof createGeneratedTestSchema>;
 
-const noElementActions = new Set<GeneratedTestAction>(["goto", "scroll_to_ratio", "scroll_by", "assert_url", "assert_title"]);
+const noElementActions = new Set<GeneratedTestAction>(["goto", "scroll_to_ratio", "scroll_by", "assert_url", "assert_title", "assert_scroll"]);
 const optionalElementActions = new Set<GeneratedTestAction>(["wait_for_stable"]);
 
 export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: PageSnapshot, input: UpdateGeneratedTestInput): GeneratedTestScenario {
@@ -44,6 +44,7 @@ export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: P
     };
   });
   const sourceElementIds = [...new Set(steps.map((step) => step.elementId).filter((value): value is string => Boolean(value)))];
+  if (!steps.some((step) => step.action.startsWith("assert_"))) throw new Error("예상 결과 확인 단계를 1개 이상 추가해 주세요.");
   return enforceSafety({
     ...existing, title: input.title, description: input.description, purpose: input.purpose, steps, sourceElementIds,
     safetyLevel: "safe", autoExecutable: true,

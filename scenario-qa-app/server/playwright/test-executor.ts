@@ -6,7 +6,7 @@ import { assertRedirectAllowed } from "../security/url-validator";
 import { sanitizeText, sanitizeUrl } from "../security/sensitive-data";
 import { savePngArtifact } from "../storage/artifact-store";
 import { createId } from "../utils/id";
-import { inferClickOutcome, verifyClickOutcome } from "./click-outcome";
+import { inferClickOutcome, urlMatchesExpected, verifyClickOutcome } from "./click-outcome";
 import { resolveLocator } from "./locator-resolver";
 
 export async function executeGeneratedTests(snapshot: PageSnapshot, scenarios: GeneratedTestScenario[]): Promise<AutomatedTestRun[]> {
@@ -62,14 +62,14 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
       const stepStarted = Date.now();
       try {
         const locatorUsed = await executeStep(page, snapshot, step, config.testStepTimeoutMs);
-        run.stepResults.push({ ...baseStep(step, "success"), expected: step.expected, actual: await actualValue(page, snapshot, step, locatorUsed), locatorUsed, currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        run.stepResults.push({ ...baseStep(step, "success"), expected: expectedValue(step), actual: await actualValue(page, snapshot, step, locatorUsed), locatorUsed, currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
       } catch (error) {
         previousFailed = true;
         const failureKind = classifyFailure(step, error);
         const screenshot = await page.screenshot({ type: "png", fullPage: false }).then((bytes) => savePngArtifact(snapshot.analysisId, bytes)).catch(() => undefined);
         if (screenshot) screenshotArtifactIds.push(screenshot.id);
         const status = failureKind === "product_defect" ? "failed" : "error";
-        run.stepResults.push({ ...baseStep(step, status, error instanceof Error ? error.message : String(error)), expected: step.expected, failureKind, currentUrl: sanitizeUrl(page.url()), screenshotArtifactId: screenshot?.id, startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        run.stepResults.push({ ...baseStep(step, status, error instanceof Error ? error.message : String(error)), expected: expectedValue(step), failureKind, currentUrl: sanitizeUrl(page.url()), screenshotArtifactId: screenshot?.id, startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
       }
     }
     run.status = run.stepResults.some((step) => step.status === "error") ? "error" : run.stepResults.some((step) => step.status === "failed") ? "failed" : "success";
@@ -98,8 +98,9 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     await waitForPageScrollStable(page, timeout);
     return undefined;
   }
-  if (step.action === "assert_url") { if (!page.url().includes(step.expected || snapshot.finalUrl)) throw new Error(`예상 URL과 다릅니다: ${page.url()}`); return undefined; }
+  if (step.action === "assert_url") { assertExpectedUrl(page.url(), step.expected || snapshot.finalUrl); return undefined; }
   if (step.action === "assert_title") { const title = await page.title(); if (step.expected ? !title.includes(step.expected) : !title.trim()) throw new Error(`페이지 제목이 예상과 다릅니다: ${title}`); return undefined; }
+  if (step.action === "assert_scroll") { await assertScrollOutcome(page, step.expected, timeout); return undefined; }
   if (step.action === "wait_for_stable") {
     const resolved = step.elementId || step.locator
       ? await resolveStepLocator(page, snapshot, step, Math.min(timeout, 1500)).catch((error) => {
@@ -140,6 +141,10 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
 async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, locatorUsed?: LocatorCandidate): Promise<string | undefined> {
   if (step.action === "assert_title") return sanitizeText(await page.title(), 500);
   if (step.action === "assert_url" || step.action === "goto") return sanitizeUrl(page.url());
+  if (step.action === "assert_scroll") {
+    const state = await page.evaluate(() => ({ scrollY: Math.round(window.scrollY), events: (window as any).__probeQaScroll?.eventCount || 0 }));
+    return `스크롤 위치 ${state.scrollY}px · 스크롤 이벤트 ${state.events}회`;
+  }
   if (step.action === "scroll_to_ratio" || step.action === "scroll_by") {
     const state = await page.evaluate(() => ({ scrollY: Math.round(window.scrollY), maxScroll: Math.max(0, document.documentElement.scrollHeight - window.innerHeight), events: (window as any).__probeQaScroll?.eventCount || 0 }));
     const ratio = state.maxScroll ? Math.round(state.scrollY / state.maxScroll * 100) : 0;
@@ -161,7 +166,41 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     const prefix = step.action === "scroll_into_view" ? "대상으로 스크롤" : "화면 내 도달";
     return `${prefix}(top ${rect.top}px / ${rect.viewportHeight}px) · 스크롤 이벤트 ${scroll.eventCount}회 · 이동 ${Math.round(scroll.lastY - scroll.startedY)}px`;
   }
+  if (["assert_visible", "assert_enabled"].includes(step.action)) return step.action === "assert_enabled" ? "활성 상태 확인" : "표시 상태 확인";
+  if (step.action === "assert_text" && locatorUsed) return sanitizeText(await resolveLocator(page, locatorUsed).innerText().catch(() => ""), 500);
+  if (step.action === "click") return "클릭 동작 완료";
   return undefined;
+}
+
+function assertExpectedUrl(actualUrl: string, expectedValue: string): void {
+  const expected = expectedValue.trim();
+  if (expected.startsWith("url-prefix:")) {
+    if (!urlMatchesExpected(actualUrl, new URL(expected.slice(11), actualUrl).href, true)) throw new Error(`예상 URL과 다릅니다. 예상: ${expected.slice(11)}, 실제: ${actualUrl}`);
+    return;
+  }
+  if (expected.startsWith("url:")) {
+    if (!urlMatchesExpected(actualUrl, new URL(expected.slice(4), actualUrl).href)) throw new Error(`예상 URL과 다릅니다. 예상: ${expected.slice(4)}, 실제: ${actualUrl}`);
+    return;
+  }
+  if (!actualUrl.includes(expected)) throw new Error(`예상 URL과 다릅니다. 예상: ${expected}, 실제: ${actualUrl}`);
+}
+
+async function assertScrollOutcome(page: Page, expected: string | undefined, timeout: number): Promise<void> {
+  const targetId = expected?.trim().replace(/^#/, "");
+  try {
+    await page.waitForFunction((id) => {
+      const tracking = (window as any).__probeQaScroll;
+      if (!id || id === "changed") return Boolean(tracking?.eventCount > 0 && Math.abs(tracking.lastY - tracking.startedY) >= 8);
+      const target = document.getElementById(id) || document.getElementsByName(id).item(0);
+      if (!target) return false;
+      const rect = target.getBoundingClientRect();
+      const style = getComputedStyle(target);
+      return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight
+        && style.display !== "none" && style.visibility !== "hidden";
+    }, targetId || "changed", { timeout });
+  } catch {
+    throw new Error(targetId && targetId !== "changed" ? `예상 섹션 #${targetId}이 화면에 표시되지 않았습니다.` : "클릭 후 예상한 스크롤 이동이 발생하지 않았습니다.");
+  }
 }
 
 export async function readStableActualValue(page: Page, locatorUsed: LocatorCandidate): Promise<string> {
@@ -172,6 +211,14 @@ export async function readStableActualValue(page: Page, locatorUsed: LocatorCand
 }
 function baseStep(step: GeneratedTestStep, status: AutomatedStepResult["status"], errorMessage?: string): AutomatedStepResult { return { stepId: step.id, order: step.order, action: step.action, description: step.description, status, errorMessage }; }
 function isAssertion(step: GeneratedTestStep) { return step.action.startsWith("assert_"); }
+function expectedValue(step: GeneratedTestStep): string | undefined {
+  if (step.expected) return step.expected;
+  if (step.action === "assert_visible") return "대상 요소가 표시됨";
+  if (step.action === "assert_in_viewport") return "대상 요소가 화면 영역 안에 표시됨";
+  if (step.action === "assert_enabled") return "대상 요소가 활성 상태임";
+  if (step.action === "assert_title") return "페이지 제목이 존재함";
+  return undefined;
+}
 
 function stepNumber(step: GeneratedTestStep, label: string, min: number, max: number): number {
   const value = Number(step.value);

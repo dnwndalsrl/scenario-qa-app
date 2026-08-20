@@ -29,7 +29,8 @@ describe("generated test editor", () => {
       title: "동적 영역 확인", description: "", purpose: "동적 상태 재현", steps: [
         { action: "scroll_to_ratio", description: "페이지 하단 상태 재현", value: "75" },
         { action: "scroll_by", description: "동적 헤더 표시", value: "-240" },
-        { action: "wait_for_stable", description: "값 안정화", elementId: "element-1", value: "300" }
+        { action: "wait_for_stable", description: "값 안정화", elementId: "element-1", value: "300" },
+        { action: "assert_visible", description: "동적 영역 표시", elementId: "element-1" }
       ]
     });
     expect(edited.steps[0]).toMatchObject({ action: "scroll_to_ratio", value: "75", elementId: undefined });
@@ -40,7 +41,7 @@ describe("generated test editor", () => {
   it("stores a page-level stability wait without requiring a target", () => {
     const edited = buildEditedScenario(existing, snapshot, {
       title: "페이지 안정화", description: "", purpose: "동적 콘텐츠 대기",
-      steps: [{ action: "wait_for_stable", description: "페이지 전체 안정화", value: "300" }]
+      steps: [{ action: "wait_for_stable", description: "페이지 전체 안정화", value: "300" }, { action: "assert_title", description: "페이지 제목 확인" }]
     });
     expect(edited.steps[0]).toMatchObject({ action: "wait_for_stable", value: "300", elementId: undefined, locator: undefined });
   });
@@ -48,6 +49,10 @@ describe("generated test editor", () => {
   it("rejects invalid dynamic-state values before execution", () => {
     expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 스크롤", description: "", purpose: "", steps: [{ action: "scroll_to_ratio", description: "범위 초과", value: "101" }] })).toThrow("0~100");
     expect(() => buildEditedScenario(existing, snapshot, { title: "잘못된 대기", description: "", purpose: "", steps: [{ action: "wait_for_stable", description: "너무 짧음", elementId: "element-1", value: "50" }] })).toThrow("100~5000");
+  });
+
+  it("rejects a click-only scenario without an expected-result assertion", () => {
+    expect(() => buildEditedScenario(existing, snapshot, { title: "클릭만 수행", description: "", purpose: "", steps: [{ action: "scroll_into_view", description: "대상 이동", elementId: "element-1" }] })).toThrow("예상 결과 확인 단계");
   });
 
   it("creates a user-owned scenario that is ready for approval", () => {

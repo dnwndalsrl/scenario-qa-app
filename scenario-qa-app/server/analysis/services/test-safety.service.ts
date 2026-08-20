@@ -10,7 +10,7 @@ export function enforceSafety(scenario: GeneratedTestScenario): GeneratedTestSce
   let level: TestSafetyLevel = scenario.safetyLevel;
   if (BLOCKED.test(source)) { level = "blocked"; reasons.push("결제·삭제·계정 변경 등 위험 키워드가 감지되었습니다."); }
   else if (REVIEW.test(source) || actions.has("press") && /enter/i.test(source)) { level = "review_required"; reasons.push("제출 또는 외부 상태 변경 가능성이 있어 사용자 검토가 필요합니다."); }
-  if ([...actions].some((action) => !["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"].includes(action))) {
+  if ([...actions].some((action) => !["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"].includes(action))) {
     level = "blocked"; reasons.push("지원하지 않는 동작이 포함되어 있습니다.");
   }
   const hasUnsafeClick = scenario.steps.some((step) => step.action === "click" && (BLOCKED.test(step.locator?.value || "") || REVIEW.test(step.locator?.value || "")));

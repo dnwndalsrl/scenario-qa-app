@@ -6,6 +6,7 @@ import { createId } from "../../utils/id";
 import { TEST_GENERATION_SYSTEM_PROMPT } from "../prompts/test-generation.prompt";
 import { requestStructuredJson } from "./openai-json.service";
 import { enforceSafety } from "./test-safety.service";
+import { ensureScenarioAssertions } from "./scenario-verification.service";
 import type { z } from "zod";
 
 type GeneratedPayload = z.infer<typeof generatedTestResponseSchema>;
@@ -50,7 +51,7 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       return { ...repairedStep, elementId: repairedStep.elementId ?? undefined, locator: repairedStep.locator ?? undefined, value: repairedStep.value ?? undefined, expected: inferredClickExpected(repairedStep.action, repairedStep.expected, element?.href, snapshot.finalUrl), timeoutMs: repairedStep.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(repairedStep.evidence || []), ...(repairedStep.elementId ? [`근거 요소: ${repairedStep.elementId}`] : [])])] };
     });
     const sourceElementIds = [...new Set([...scenario.sourceElementIds, ...steps.map((step) => step.elementId).filter((id): id is string => Boolean(id))])];
-    return enforceSafety({ ...scenario, sourceElementIds, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() });
+    return ensureScenarioAssertions(enforceSafety({ ...scenario, sourceElementIds, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() }), snapshot);
   });
 }
 
@@ -84,7 +85,7 @@ export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenari
   const linkScenarios = internalLinks.slice(0, config.maxGeneratedScenarios).map((element) => {
     const locator = executableClickLocator(element)!;
     const name = element.accessibleName || element.text || element.label || "내부 링크";
-    return enforceSafety({
+    return ensureScenarioAssertions(enforceSafety({
       id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId,
       title: `${name} 링크 이동 확인`, description: `${name} 링크가 실제 상호작용 요소로 동작하는지 확인합니다.`, purpose: "내부 페이지 이동 검증",
       category: "navigation", safetyLevel: "safe", safetyReasons: [], confidence: .7, autoExecutable: true, sourceElementIds: [element.id], requirementIds: [],
@@ -92,7 +93,7 @@ export function buildFallbackTests(snapshot: PageSnapshot): GeneratedTestScenari
         { id: createId("step"), order: 1, action: "wait_for_stable", description: "페이지가 안정될 때까지 대기", value: "300", evidence: [] },
         { id: createId("step"), order: 2, action: "click", description: `${name} 링크 클릭`, elementId: element.id, locator, expected: inferredClickExpected("click", undefined, element.href, snapshot.finalUrl), evidence: [`근거 요소: ${element.id}`] }
       ], generatedAt: new Date().toISOString()
-    });
+    }), snapshot);
   });
   if (linkScenarios.length) return linkScenarios;
   return visibleElements.slice(0, config.maxGeneratedScenarios).map((element) => {
