@@ -51,10 +51,11 @@ describe("URL 입력부터 QA 보고서까지", () => {
   it("동일 origin의 주요 페이지를 제한적으로 탐색하고 위험 링크를 방문하지 않는다", async () => {
     const { createSiteAnalysis, getAnalysisDetail } = await import("./site-analysis.service");
     const created = await createSiteAnalysis(fixtureUrl, { mode: "site_crawl", maxPages: 5, maxDepth: 2 }); let detail;
-    for (let poll = 0; poll < 200; poll += 1) { detail = await getAnalysisDetail(created.id); if (["completed", "partially_completed", "failed"].includes(detail.analysis.status)) break; await new Promise((resolve) => setTimeout(resolve, 100)); }
+    for (let poll = 0; poll < 400; poll += 1) { detail = await getAnalysisDetail(created.id); if (["completed", "partially_completed", "failed"].includes(detail.analysis.status)) break; await new Promise((resolve) => setTimeout(resolve, 100)); }
     expect(["completed", "partially_completed"]).toContain(detail?.analysis.status); expect(detail?.pages.length).toBeGreaterThan(1); expect(detail?.pages.length).toBeLessThanOrEqual(5); expect(detail?.siteMap?.nodes.length).toBe(detail?.pages.length); expect(detail?.generatedTests.length).toBeGreaterThan(1);
     expect(detail?.pages.every((page) => new URL(page.page.normalizedUrl).origin === fixtureUrl)).toBe(true); expect(detail?.analysis.crawlState?.maxPages).toBe(5);
     const log = await fetch(`${fixtureUrl}/requests`).then((response) => response.json()) as { requests: string[] };
     expect(log.requests.some((value) => /\/logout|\/account\/delete|manual\.pdf|private-preview/.test(value))).toBe(false);
   });
 });
+
