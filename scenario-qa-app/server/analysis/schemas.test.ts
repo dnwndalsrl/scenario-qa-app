@@ -61,6 +61,6 @@ describe("AI 구조화 출력 검증", () => {
     ] } as PageSnapshot;
 
     expect(buildFallbackTests(snapshot)).toHaveLength(1);
-    expect(buildFallbackTests(snapshot)[0]).toMatchObject({ safetyLevel: "safe", sourceElementIds: ["element-link"], steps: [{ action: "wait_for_stable" }, { action: "click", elementId: "element-link", locator: hrefLocator, expected: "url-prefix:https://example.com/smartfarm/system/" }] });
+    expect(buildFallbackTests(snapshot)[0]).toMatchObject({ safetyLevel: "safe", sourceElementIds: ["element-link"], steps: [{ action: "wait_for_stable" }, { action: "click", elementId: "element-link", locator: hrefLocator, expected: "url-prefix:https://example.com/smartfarm/system/" }, { action: "assert_url", expected: "url-prefix:https://example.com/smartfarm/system/" }] });
   });
 });

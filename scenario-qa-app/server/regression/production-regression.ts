@@ -17,11 +17,13 @@ export function buildDoctorAgRegressionScenarios(snapshot: PageSnapshot): Genera
   return [
     scenario(snapshot, "product-redirect", "Product 리디렉션", [
       step("wait_for_stable", "Product 링크 안정화", product, "150"),
-      step("click", "Product 링크 클릭", product)
+      step("click", "Product 링크 클릭", product),
+      plainStep("assert_url", "Product 페이지 이동 확인", undefined, `url-prefix:${product.href}`)
     ]),
     scenario(snapshot, "dynamic-header-link", "동적 헤더 Dr. AG 이동", [
       step("wait_for_stable", "Dr. AG 링크 안정화", doctor, "150"),
-      step("click", "Dr. AG 링크 클릭", doctor)
+      step("click", "Dr. AG 링크 클릭", doctor),
+      plainStep("assert_url", "Dr. AG 페이지 이동 확인", undefined, `url-prefix:${doctor.href}`)
     ]),
     scenario(snapshot, "annual-volume-viewport", "연간 출하량 뷰포트 표시", [
       step("scroll_into_view", "연간 출하량 영역으로 스크롤", annual),
@@ -29,7 +31,8 @@ export function buildDoctorAgRegressionScenarios(snapshot: PageSnapshot): Genera
     ]),
     scenario(snapshot, "top-scroll", "Top 버튼 최상단 복귀", [
       plainStep("scroll_to_ratio", "페이지 하단으로 스크롤", "100"),
-      step("click", "Top 버튼 클릭", top, undefined, "scroll")
+      step("click", "Top 버튼 클릭", top, undefined, "scroll"),
+      plainStep("assert_scroll", "최상단 스크롤 이동 확인", undefined, "changed")
     ])
   ];
 }
@@ -75,8 +78,8 @@ function step(action: GeneratedTestStep["action"], description: string, element:
   return { id: `step-${action}-${element.id}`, order: 0, action, description, elementId: element.id, locator, value, expected, evidence: [`운영 회귀 요소: ${element.id}`] };
 }
 
-function plainStep(action: GeneratedTestStep["action"], description: string, value: string): GeneratedTestStep {
-  return { id: `step-${action}`, order: 0, action, description, value, evidence: ["운영 회귀 고정 조건"] };
+function plainStep(action: GeneratedTestStep["action"], description: string, value?: string, expected?: string): GeneratedTestStep {
+  return { id: `step-${action}`, order: 0, action, description, value, expected, evidence: ["운영 회귀 고정 조건"] };
 }
 
 function preferredLocator(candidates: LocatorCandidate[]): LocatorCandidate {

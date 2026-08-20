@@ -43,7 +43,7 @@ export const generatedTestResponseSchema = z.object({
     safetyLevel: z.enum(["safe", "review_required", "blocked"]), confidence: z.number().min(0).max(1), autoExecutable: z.boolean(),
     sourceElementIds: elementIds, requirementIds: elementIds,
     steps: z.array(z.object({
-      order: z.number().int().positive(), action: z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]),
+      order: z.number().int().positive(), action: z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]),
       description: z.string().min(1).max(300), elementId: z.string().nullable(), locator: locatorCandidateSchema.nullable(), value: z.string().max(500).nullable(), expected: z.string().max(500).nullable(), timeoutMs: z.number().int().min(1000).max(30000).nullable(), evidence: z.array(z.string().max(300)).max(10)
     })).min(1).max(10)
   })).min(1).max(10)

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AnalysisDetail, SiteAnalysis, SiteAnalysisOptions } from "../../shared/types/analysis";
 import { buildCurrentSummary } from "../analysis/services/analysis-summary.service";
+import { ensureScenarioAssertions } from "../analysis/services/scenario-verification.service";
 
 const activeStatuses = new Set(["queued", "dispatching", "dispatched", "running", "cancel_requested"]);
 
@@ -37,7 +38,10 @@ export async function getAnalysisDetailFromSupabase(client: SupabaseClient, id: 
     client.from("requirement_documents").select("payload,status,file_name,error").eq("analysis_id", id).maybeSingle()
   ]);
   const payload = (summaryResult.data?.payload || {}) as Partial<AnalysisDetail>;
-  const generatedTests = (testsResult.data || []).map((item: any) => item.payload);
+  const storedTests = (testsResult.data || []).map((item: any) => item.payload);
+  const generatedTests = payload.snapshot
+    ? storedTests.map((test) => ensureScenarioAssertions(test, payload.snapshot!))
+    : storedTests;
   const testRuns = (runsResult.data || []).map((item: any) => item.payload);
   const storedSummary = row.summary || payload.analysis?.summary;
   const currentSummary = row.mode === "single_page" && payload.snapshot && payload.pageAnalysis
