@@ -1,0 +1,79 @@
+name: Deploy exact moving header clicks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch moving-header click fallback
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          executor = Path("scenario-qa-app/server/playwright/test-executor.ts")
+          text = executor.read_text(encoding="utf-8")
+          first = "      if (await clickVerifiedHitPoint(page, locator)) return;\n"
+          if first not in text:
+              raise SystemExit("primary pointer click was not found")
+          text = text.replace(first, "", 1)
+          second = "      if (await clickVerifiedHitPoint(page, locator)) return;"
+          if second not in text:
+              raise SystemExit("fallback pointer click was not found")
+          text = text.replace(second, "      if (await clickExactDomTarget(page, locator)) return;", 1)
+          start = text.index('async function clickVerifiedHitPoint')
+          end = text.index('async function waitForInViewport', start)
+          replacement = '''async function clickExactDomTarget(page: Page, locator: import("playwright").Locator): Promise<boolean> {
+            const clicked = await locator.evaluate((element) => {
+              const style = getComputedStyle(element);
+              if (style.pointerEvents === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 || element.getAttribute("aria-disabled") === "true") return undefined;
+              if (element instanceof HTMLButtonElement && element.disabled) return undefined;
+              const rect = element.getBoundingClientRect();
+              if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) return undefined;
+              if (!(element instanceof HTMLElement)) return undefined;
+              element.click();
+              return true;
+            }).catch(() => undefined);
+            if (!clicked) return false;
+            await page.waitForTimeout(100);
+            return true;
+          }
+
+          '''
+          executor.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
+
+          test = Path("scenario-qa-app/server/playwright/page-collector.test.ts")
+          test_text = test.read_text(encoding="utf-8")
+          old_name = 'it("uses a verified pointer hit when a moving menu cannot satisfy locator stability"'
+          new_name = 'it("clicks the exact DOM target when a moving menu cannot satisfy locator stability"'
+          if old_name not in test_text:
+              raise SystemExit("moving menu regression test was not found")
+          test.write_text(test_text.replace(old_name, new_name, 1), encoding="utf-8")
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: scenario-qa-app/package-lock.json
+      - name: Install dependencies
+        working-directory: scenario-qa-app
+        run: npm ci
+      - name: Verify typecheck, tests, and build
+        working-directory: scenario-qa-app
+        run: npm run check
+      - name: Commit verified fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scenario-qa-app/server/playwright/test-executor.ts scenario-qa-app/server/playwright/page-collector.test.ts
+          git commit -m "Click exact targets in moving headers"
+          git push origin HEAD:main
