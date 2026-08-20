@@ -66,6 +66,9 @@ jobs:
       - name: Install dependencies
         working-directory: scenario-qa-app
         run: npm ci
+      - name: Install Chromium
+        working-directory: scenario-qa-app
+        run: npx playwright install --with-deps chromium
       - name: Verify typecheck, tests, and build
         working-directory: scenario-qa-app
         run: npm run check
