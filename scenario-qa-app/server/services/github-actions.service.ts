@@ -2,6 +2,16 @@ export interface GitHubDispatchConfig {
   token: string; owner: string; repo: string; workflowId: string; ref: string;
 }
 
+export interface GitHubWorkflowRun {
+  status: "queued" | "in_progress" | "completed";
+  conclusion?: string;
+  runNumber: number;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  commitSha: string;
+}
+
 export function workflowDispatchUrl(config: GitHubDispatchConfig): string {
   for (const [name, value] of Object.entries(config)) if (!value) throw new Error(`GitHub Actions ${name} is not configured`);
   return `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/actions/workflows/${encodeURIComponent(config.workflowId)}/dispatches`;
@@ -31,6 +41,21 @@ export async function dispatchTestWorkflow(analysisId: string, testId: string, t
 export async function dispatchApprovedTestsWorkflow(analysisId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {
   if (!uuidPattern.test(analysisId)) throw new Error("Invalid analysis id");
   await dispatchWorkflow({ analysis_id: analysisId, mode: "approved_tests", test_id: "", test_run_id: "" }, config, fetcher);
+}
+
+export async function latestWorkflowRun(config: GitHubDispatchConfig, workflowId: string, fetcher: typeof fetch = fetch): Promise<GitHubWorkflowRun | undefined> {
+  const base = workflowDispatchUrl({ ...config, workflowId }).replace(/\/dispatches$/, "/runs");
+  const response = await fetcher(`${base}?branch=${encodeURIComponent(config.ref)}&per_page=1`, {
+    headers: { accept: "application/vnd.github+json", authorization: `Bearer ${config.token}`, "x-github-api-version": "2022-11-28" }
+  });
+  if (!response.ok) throw new Error(`GitHub Actions run lookup failed (${response.status})`);
+  const payload = await response.json() as { workflow_runs?: Array<Record<string, unknown>> };
+  const run = payload.workflow_runs?.[0];
+  if (!run) return undefined;
+  return {
+    status: run.status as GitHubWorkflowRun["status"], conclusion: typeof run.conclusion === "string" ? run.conclusion : undefined,
+    runNumber: Number(run.run_number), url: String(run.html_url), createdAt: String(run.created_at), updatedAt: String(run.updated_at), commitSha: String(run.head_sha)
+  };
 }
 
 export function githubConfigFromRuntime(config: ReturnType<typeof useRuntimeConfig>): GitHubDispatchConfig {
