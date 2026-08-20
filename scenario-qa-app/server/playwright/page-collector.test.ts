@@ -196,7 +196,7 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(run?.stepResults[2]?.currentUrl).toContain("/about");
   });
 
-  it("uses a verified pointer hit when a moving menu cannot satisfy locator stability", async () => {
+  it("clicks the exact DOM target when a moving menu cannot satisfy locator stability", async () => {
     const link = snapshot.elements.find((element) => element.testId === "moving-header-link")!;
     const scenario = makeScenario("moving-header-link", [
       { action: "click", description: "움직이는 메뉴 클릭", elementId: link.id, locator: link.locatorCandidates.find((item) => item.unique)!, timeoutMs: 2500 },

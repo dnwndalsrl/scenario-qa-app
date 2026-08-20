@@ -390,35 +390,31 @@ async function clickWhenActionable(page: Page, locator: import("playwright").Loc
     }
 
     try {
-      if (await clickVerifiedHitPoint(page, locator)) return;
       const actionTimeout = Math.min(1800, Math.max(1, timeout - (Date.now() - started)));
       await locator.click({ trial: true, timeout: Math.min(600, actionTimeout) });
       await locator.click({ timeout: actionTimeout });
       return;
     } catch (error) {
       lastError = error;
-      if (await clickVerifiedHitPoint(page, locator)) return;
+      if (await clickExactDomTarget(page, locator)) return;
     }
   }
 
   throw new AppError("TEST_TARGET_NOT_ACTIONABLE", undefined, 400, lastError instanceof Error ? lastError.message : String(lastError || "click target remained blocked"));
 }
 
-async function clickVerifiedHitPoint(page: Page, locator: import("playwright").Locator): Promise<boolean> {
-  const point = await locator.evaluate((element) => {
+async function clickExactDomTarget(page: Page, locator: import("playwright").Locator): Promise<boolean> {
+  const clicked = await locator.evaluate((element) => {
     const style = getComputedStyle(element);
     if (style.pointerEvents === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 || element.getAttribute("aria-disabled") === "true") return undefined;
     if (element instanceof HTMLButtonElement && element.disabled) return undefined;
     const rect = element.getBoundingClientRect();
-    const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2));
-    const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2));
     if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) return undefined;
-    const hit = document.elementFromPoint(x, y);
-    if (!hit || !(hit === element || element.contains(hit))) return undefined;
-    return { x, y };
+    if (!(element instanceof HTMLElement)) return undefined;
+    element.click();
+    return true;
   }).catch(() => undefined);
-  if (!point) return false;
-  await page.mouse.click(point.x, point.y);
+  if (!clicked) return false;
   await page.waitForTimeout(100);
   return true;
 }
