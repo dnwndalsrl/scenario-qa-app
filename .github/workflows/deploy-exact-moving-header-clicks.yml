@@ -9,6 +9,8 @@ permissions:
 jobs:
   patch-test-deploy:
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/scenario-test-runner/.playwright-browsers
     steps:
       - uses: actions/checkout@v4
         with:
