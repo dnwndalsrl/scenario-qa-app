@@ -54,5 +54,6 @@ jobs:
           name: production-regression-${{ github.run_number }}
           path: scenario-qa-app/.qa-regression/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
 
