@@ -27,6 +27,7 @@ const busyId = ref("");
 const drafts = ref<Record<string, EditorDraft>>({});
 const feedback = ref("");
 const feedbackError = ref(false);
+const downloading = ref(false);
 const activeRunId = ref("");
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let refreshDeadline = 0;
@@ -112,6 +113,24 @@ function onActionChanged(step: EditableStep) {
 function errorMessage(cause: any, fallback: string) {
   return cause?.data?.statusMessage || cause?.data?.message || cause?.message || fallback;
 }
+async function downloadWorkbook() {
+  downloading.value = true;
+  feedback.value = "";
+  try {
+    const blob = await $api<Blob>(`/api/analyses/${props.analysisId}/tests/export`, { responseType: "blob" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `probe-qa-test-scenarios-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}.xlsx`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    feedbackError.value = false;
+    feedback.value = "테스트 시나리오 엑셀 파일을 다운로드했습니다.";
+  } catch (cause) {
+    feedbackError.value = true;
+    feedback.value = errorMessage(cause, "엑셀 파일 다운로드에 실패했습니다.");
+  } finally { downloading.value = false; }
+}
 async function save(testId: string) {
   const draft = drafts.value[testId];
   if (!draft) return;
@@ -169,7 +188,7 @@ onBeforeUnmount(stopRefresh);
   <component :is="compact ? 'div' : 'section'" :class="compact ? 'detail-block' : 'section card report-section report-section--tests'">
     <div class="section-head">
       <div><h2 v-if="!compact">AI가 제안한 테스트</h2><h3 v-else>자동 생성 테스트</h3><p>시나리오를 수정하거나 안전한 테스트 한 건만 다시 실행할 수 있습니다.</p></div>
-      <div class="scenario-actions"><span class="tag">{{ tests.length }}개</span><button v-if="reviewMode && editingId !== '__new'" type="button" class="scenario-button" @click="startAdd">새 시나리오 추가</button></div>
+      <div class="scenario-actions scenario-actions--head"><span class="tag">{{ tests.length }}개</span><button type="button" class="scenario-button scenario-button--download" :disabled="!tests.length || downloading" @click="downloadWorkbook">{{ downloading ? '엑셀 생성 중…' : '엑셀 다운로드' }}</button><button v-if="reviewMode && editingId !== '__new'" type="button" class="scenario-button" @click="startAdd">새 시나리오 추가</button></div>
     </div>
     <div v-if="feedback" :class="feedbackError ? 'error-box' : 'notice'">{{ feedback }}</div>
     <p v-if="!tests.length && editingId !== '__new'" class="muted">생성된 테스트가 없습니다.</p>
