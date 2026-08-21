@@ -35,7 +35,7 @@ function nextStepIsAssertion(steps: GeneratedTestStep[], order: number): boolean
 
 function clickAssertion(step: GeneratedTestStep, element: DiscoveredElement | undefined, pageUrl: string): GeneratedTestStep | undefined {
   const expected = inferClickExpected(step.expected, element?.href, pageUrl);
-  if (!expected) return undefined;
+  if (!expected) return stateAttributeAssertion(step, element);
   if (expected.kind === "url") {
     return {
       id: createId("step"), order: step.order + 1, action: "assert_url",
@@ -47,6 +47,24 @@ function clickAssertion(step: GeneratedTestStep, element: DiscoveredElement | un
     id: createId("step"), order: step.order + 1, action: "assert_scroll",
     description: expected.value === "changed" ? "클릭 후 스크롤이 이동했는지 확인" : `클릭 후 ${expected.value} 섹션이 화면에 표시되는지 확인`,
     expected: expected.value, evidence: [...new Set([...step.evidence, ...(step.elementId ? [`근거 요소: ${step.elementId}`] : [])])]
+  };
+}
+
+function stateAttributeAssertion(step: GeneratedTestStep, element: DiscoveredElement | undefined): GeneratedTestStep | undefined {
+  const toggles: Record<string, Record<string, string>> = {
+    "aria-expanded": { false: "true", true: "false" },
+    "aria-selected": { false: "true", true: "false" },
+    "aria-pressed": { false: "true", true: "false" },
+    "aria-checked": { false: "true", true: "false" },
+    "data-state": { closed: "open", open: "closed" }
+  };
+  const entry = Object.entries(element?.stateAttributes || {}).find(([name, value]) => toggles[name]?.[value]);
+  const locator = element?.locatorCandidates.find((candidate) => candidate.unique);
+  if (!entry || !element || !locator) return undefined;
+  const [name, current] = entry;
+  return {
+    id: createId("step"), order: step.order + 1, action: "assert_attribute", description: `클릭 후 ${name} 상태가 변경되었는지 확인`,
+    elementId: element.id, locator, value: name, expected: toggles[name]![current]!, evidence: [...new Set([...step.evidence, `초기 ${name}: ${current}`, `근거 요소: ${element.id}`])]
   };
 }
 

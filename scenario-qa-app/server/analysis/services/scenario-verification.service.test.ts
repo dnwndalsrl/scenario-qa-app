@@ -8,7 +8,8 @@ const snapshot = {
   elements: [
     { id: "link-page", type: "link", tagName: "a", href: "/en", visible: true, actionable: true, locatorCandidates: [], safetyHints: [] },
     { id: "link-section", type: "link", tagName: "a", href: "#about", visible: true, actionable: true, locatorCandidates: [], safetyHints: [] },
-    { id: "button", type: "button", tagName: "button", visible: true, actionable: true, locatorCandidates: [], safetyHints: [] }
+    { id: "button", type: "button", tagName: "button", visible: true, actionable: true, locatorCandidates: [], safetyHints: [] },
+    { id: "accordion", type: "button", tagName: "button", visible: true, actionable: true, stateAttributes: { "aria-expanded": "false" }, locatorCandidates: [{ strategy: "test_id", value: "accordion", score: 100, unique: true }], safetyHints: [] }
   ]
 } as PageSnapshot;
 
@@ -34,6 +35,10 @@ describe("scenario verification", () => {
 
   it("requires review when a click outcome cannot be inferred", () => {
     expect(ensureScenarioAssertions(scenario("button"), snapshot)).toMatchObject({ safetyLevel: "review_required", autoExecutable: false });
+  });
+
+  it("adds an attribute assertion for a safe aria state toggle", () => {
+    expect(ensureScenarioAssertions(scenario("accordion"), snapshot).steps[2]).toMatchObject({ action: "assert_attribute", elementId: "accordion", value: "aria-expanded", expected: "true" });
   });
 
   it("does not duplicate an existing assertion", () => {

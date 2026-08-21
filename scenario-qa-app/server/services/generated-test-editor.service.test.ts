@@ -66,4 +66,9 @@ describe("generated test editor", () => {
     expect(added).toMatchObject({ analysisId: "analysis-1", source: "user", revision: 1, safetyLevel: "safe", autoExecutable: true, requirementIds: [] });
     expect(added.steps[0]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { unique: true } });
   });
+
+  it("validates required values for state assertions", () => {
+    expect(() => buildEditedScenario(existing, snapshot, { title: "속성 확인", description: "", purpose: "", steps: [{ action: "assert_attribute", description: "속성", elementId: "element-1", expected: "true" }] })).toThrow("속성명");
+    expect(() => buildEditedScenario(existing, snapshot, { title: "개수 확인", description: "", purpose: "", steps: [{ action: "assert_count", description: "개수", elementId: "element-1", expected: "-1" }] })).toThrow("0 이상의 정수");
+  });
 });

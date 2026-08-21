@@ -14,7 +14,7 @@ interface RawElement {
   href?: string; inputType?: string; enabled?: boolean; required?: boolean; readonly?: boolean; id?: string; classes?: string[];
   headingLevel?: number; formKey?: string; method?: string; action?: string; alt?: string; noFollow?: boolean; download?: boolean;
   region?: "header" | "main" | "footer" | "other";
-  domPath?: string; inViewport?: boolean; actionable?: boolean;
+  domPath?: string; inViewport?: boolean; actionable?: boolean; stateAttributes?: Record<string, string>;
 }
 interface ObservedRawElement extends RawElement { observedStates: PageObservationState[]; inViewportStates: PageObservationState[]; }
 
@@ -102,7 +102,7 @@ async function collectPageInContext(context: BrowserContext, analysisId: string,
         id: `element-${index + 1}`, type: elementType(raw), tagName: raw.tagName, role: raw.role, accessibleName: raw.accessibleName,
         label: raw.label, text: raw.text, placeholder: raw.placeholder, testId: raw.testId, href: raw.href ? sanitizeUrl(raw.href) : undefined,
         inputType: raw.inputType, visible: true, enabled: raw.enabled, required: raw.required, readonly: raw.readonly, actionable: raw.actionable,
-        locatorCandidates: candidates, safetyHints: RISK_WORDS.test(riskSource) ? ["상태 변경 가능성이 있는 문구가 발견됨"] : [],
+        locatorCandidates: candidates, safetyHints: RISK_WORDS.test(riskSource) ? ["상태 변경 가능성이 있는 문구가 발견됨"] : [], stateAttributes: raw.stateAttributes,
         observedStates: raw.observedStates, inViewportStates: raw.inViewportStates
       });
     }
@@ -212,6 +212,8 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
       const accessibleName = helpers.clean(node.getAttribute("aria-label") || label || text || node.getAttribute("title") || image.alt || linkedHeading, 300);
       const ownerForm = node.tagName === "FORM" ? node as HTMLFormElement : node.closest("form");
       const rect = node.getBoundingClientRect();
+      const stateAttributes = Object.fromEntries(["aria-expanded", "aria-selected", "aria-pressed", "aria-checked", "aria-controls", "data-state"]
+        .map((name) => [name, node.getAttribute(name)] as const).filter((entry): entry is readonly [string, string] => entry[1] !== null));
       return {
         tagName: node.tagName.toLowerCase(), role: role || undefined, accessibleName, label: helpers.clean(label), text,
         placeholder: helpers.clean(input.placeholder), testId: node.dataset.testid, href: anchor.href || undefined,
@@ -224,7 +226,7 @@ async function collectRawElements(page: Page, maxElements: number, maxTotalText:
         download: node.tagName === "A" ? node.hasAttribute("download") : undefined,
         region: node.closest("header") ? "header" : node.closest("main") ? "main" : node.closest("footer") ? "footer" : "other",
         domPath: helpers.path(node), inViewport: rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth,
-        actionable: helpers.actionable(node)
+        actionable: helpers.actionable(node), stateAttributes: Object.keys(stateAttributes).length ? stateAttributes : undefined
       };
     });
   }, { maxElements, maxTotalText });

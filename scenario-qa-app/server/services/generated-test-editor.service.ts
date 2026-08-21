@@ -3,7 +3,7 @@ import type { GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from ".
 import { enforceSafety } from "../analysis/services/test-safety.service";
 import { createId } from "../utils/id";
 
-const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "click", "fill", "select", "press", "check", "uncheck"]);
+const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_hidden", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "assert_attribute", "assert_value", "assert_count", "click", "fill", "select", "press", "check", "uncheck"]);
 
 export const updateGeneratedTestSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -34,7 +34,10 @@ export function buildEditedScenario(existing: GeneratedTestScenario, snapshot: P
     const element = step.elementId ? elements.get(step.elementId) : undefined;
     if (step.elementId && !element) throw new Error(`단계 ${index + 1}의 대상 요소를 찾을 수 없습니다.`);
     if (needsElement && !element) throw new Error(`단계 ${index + 1}의 대상 요소를 선택해 주세요.`);
-    const locator = element?.locatorCandidates.find((candidate) => candidate.unique);
+    if (step.action === "assert_value" && element?.inputType === "password") throw new Error(`단계 ${index + 1}의 비밀번호 값은 검증하거나 저장할 수 없습니다.`);
+    const locator = step.action === "assert_count"
+      ? element?.locatorCandidates.find((candidate) => !candidate.unique) || element?.locatorCandidates[0]
+      : element?.locatorCandidates.find((candidate) => candidate.unique);
     if ((needsElement || element) && !locator) throw new Error(`단계 ${index + 1}의 대상 요소에 고유 locator가 없습니다.`);
     return {
       id: createId("step"), order: index + 1, action: step.action, description: step.description,
@@ -57,6 +60,10 @@ function validateDynamicStepValue(step: UpdateGeneratedTestInput["steps"][number
   if (step.action === "scroll_to_ratio" && (!step.value?.trim() || !Number.isFinite(value) || value < 0 || value > 100)) throw new Error(`단계 ${index + 1}의 스크롤 비율은 0~100 사이 숫자여야 합니다.`);
   if (step.action === "scroll_by" && (!step.value?.trim() || !Number.isFinite(value) || value < -10000 || value > 10000)) throw new Error(`단계 ${index + 1}의 스크롤 이동값은 -10000~10000 사이 숫자여야 합니다.`);
   if (step.action === "wait_for_stable" && step.value?.trim() && (!Number.isFinite(value) || value < 100 || value > 5000)) throw new Error(`단계 ${index + 1}의 안정 유지 시간은 100~5000ms 사이 숫자여야 합니다.`);
+  if (step.action === "assert_attribute" && !step.value?.trim()) throw new Error(`단계 ${index + 1}의 속성명을 입력해 주세요.`);
+  if (step.action === "assert_attribute" && !/^[a-zA-Z_:][a-zA-Z0-9:._-]*$/.test(step.value!.trim())) throw new Error(`단계 ${index + 1}의 속성명이 올바르지 않습니다.`);
+  if (["assert_attribute", "assert_value"].includes(step.action) && !step.expected?.trim()) throw new Error(`단계 ${index + 1}의 예상값을 입력해 주세요.`);
+  if (step.action === "assert_count" && (!step.expected?.trim() || !Number.isInteger(Number(step.expected)) || Number(step.expected) < 0)) throw new Error(`단계 ${index + 1}의 예상 개수는 0 이상의 정수여야 합니다.`);
 }
 
 export function buildAddedScenario(analysisId: string, snapshot: PageSnapshot, input: CreateGeneratedTestInput): GeneratedTestScenario {
