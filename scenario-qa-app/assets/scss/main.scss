@@ -167,6 +167,9 @@ h3 { margin: 0; font-size: 17px; }
 .scenario-spacer { flex: 1; }
 .scenario-button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); font-weight: 700; cursor: pointer; }
 .scenario-button--primary { border-color: var(--brand); background: var(--brand); color: white; }
+.scenario-actions--head { margin-top: 0; justify-content: flex-end; }
+.scenario-button--download { border-color: #9aa8ba; background: #f8fafc; }
+.scenario-button--download::before { content: "↓"; margin-right: 6px; }
 .scenario-button:disabled { opacity: .5; cursor: not-allowed; }
 .scenario-run { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 14px; color: var(--muted); font-size: 12px; }
 .scenario-editor { display: grid; gap: 12px; }
