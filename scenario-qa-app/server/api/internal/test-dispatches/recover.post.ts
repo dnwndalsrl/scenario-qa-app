@@ -12,8 +12,11 @@ export default defineEventHandler(async (event) => {
 
   const client = createServiceSupabaseClient(event);
   const { data, error } = await client.from("test_runs")
-    .select("id,analysis_id,test_id,payload").eq("status", "pending").order("created_at").limit(100);
-  if (error) throw createError({ statusCode: 500, statusMessage: "복구할 테스트 실행을 조회하지 못했습니다." });
+    .select("id,analysis_id,test_id,payload").eq("status", "pending").limit(100);
+  if (error) {
+    console.error("[test-dispatch-recovery] query failed", error.code, error.message);
+    throw createError({ statusCode: 500, statusMessage: "복구할 테스트 실행을 조회하지 못했습니다." });
+  }
 
   const now = new Date();
   const counts = { examined: data?.length || 0, dispatched: 0, retrying: 0, exhausted: 0, expired: 0 };
