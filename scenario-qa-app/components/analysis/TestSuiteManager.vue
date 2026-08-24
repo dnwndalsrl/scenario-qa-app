@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AutomatedTestRun, GeneratedTestScenario, TestSuite } from "~/shared/types/analysis";
+import { latestTestSuiteRunSummary } from "~/shared/utils/test-suite-summary";
 
 const props = withDefaults(defineProps<{
   analysisId: string;
@@ -25,6 +26,7 @@ let refreshDeadline = 0;
 
 const executableTests = computed(() => props.tests.filter((test) => test.safetyLevel === "safe" && test.autoExecutable));
 const allSelected = computed(() => executableTests.value.length > 0 && selectedIds.value.length === executableTests.value.length);
+const suiteItems = computed(() => suites.value.map((suite) => ({ suite, summary: latestTestSuiteRunSummary(suite.id, props.runs) })));
 
 function errorMessage(cause: any, fallback: string) {
   return cause?.data?.statusMessage || cause?.data?.message || cause?.message || fallback;
@@ -32,6 +34,18 @@ function errorMessage(cause: any, fallback: string) {
 function suiteTestTitles(suite: TestSuite) {
   const titles = suite.testIds.map((id) => props.tests.find((test) => test.id === id)?.title).filter(Boolean) as string[];
   return titles.length ? titles.join(" · ") : "저장된 시나리오를 확인할 수 없습니다.";
+}
+function summaryStatus(status: "running" | "success" | "failed" | "error") {
+  return { running: "실행 중", success: "성공", failed: "실패", error: "오류" }[status];
+}
+function formatDate(value?: string) {
+  if (!value) return "기록 중";
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+function formatDuration(value?: number) {
+  if (value === undefined) return "계산 중";
+  if (value < 60_000) return `${Math.max(1, Math.round(value / 1000))}초`;
+  return `${Math.floor(value / 60_000)}분 ${Math.round((value % 60_000) / 1000)}초`;
 }
 function toggleAll() {
   selectedIds.value = allSelected.value ? [] : executableTests.value.map((test) => test.id);
@@ -107,10 +121,23 @@ onBeforeUnmount(stopRefresh);
     </div>
     <div v-if="feedback" :class="feedbackError ? 'error-box' : 'notice'">{{ feedback }}</div>
     <div v-if="loading" class="suite-panel__empty">스위트를 불러오는 중입니다.</div>
-    <div v-else-if="suites.length" class="suite-list">
-      <article v-for="suite in suites" :key="suite.id" class="suite-item">
-        <div><div class="suite-item__title"><strong>{{ suite.name }}</strong><span>{{ suite.testIds.length }}개 시나리오</span></div><p>{{ suiteTestTitles(suite) }}</p></div>
-        <button type="button" class="scenario-button scenario-button--primary" :disabled="!canRun || Boolean(busySuiteId) || Boolean(activeRunIds.length)" @click="runSuite(suite)">{{ busySuiteId === suite.id ? '요청 중…' : activeRunIds.length ? '실행 중…' : '일괄 실행' }}</button>
+    <div v-else-if="suiteItems.length" class="suite-list">
+      <article v-for="item in suiteItems" :key="item.suite.id" class="suite-item">
+        <div class="suite-item__main">
+          <div><div class="suite-item__title"><strong>{{ item.suite.name }}</strong><span>{{ item.suite.testIds.length }}개 시나리오</span></div><p>{{ suiteTestTitles(item.suite) }}</p></div>
+          <button type="button" class="scenario-button scenario-button--primary" :disabled="!canRun || Boolean(busySuiteId) || Boolean(activeRunIds.length)" @click="runSuite(item.suite)">{{ busySuiteId === item.suite.id ? '요청 중…' : activeRunIds.length ? '실행 중…' : '일괄 실행' }}</button>
+        </div>
+        <div v-if="item.summary" class="suite-summary">
+          <span class="suite-summary__status" :class="`suite-summary__status--${item.summary.status}`">{{ summaryStatus(item.summary.status) }}</span>
+          <dl class="suite-summary__metrics">
+            <div><dt>전체</dt><dd>{{ item.summary.totalCount }}</dd></div>
+            <div><dt>성공</dt><dd>{{ item.summary.successCount }}</dd></div>
+            <div><dt>실패</dt><dd>{{ item.summary.failedCount }}</dd></div>
+            <div><dt>오류·차단</dt><dd>{{ item.summary.errorCount }}</dd></div>
+          </dl>
+          <p class="suite-summary__meta">최근 실행 {{ formatDate(item.summary.completedAt || item.summary.startedAt) }} · 소요 {{ formatDuration(item.summary.durationMs) }}</p>
+        </div>
+        <p v-else class="suite-summary__empty">아직 스위트 실행 이력이 없습니다.</p>
       </article>
     </div>
     <div v-else-if="!composing" class="suite-panel__empty">저장한 테스트 스위트가 없습니다.</div>

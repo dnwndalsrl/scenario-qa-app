@@ -123,6 +123,7 @@ export interface AutomatedTestRun {
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
   trigger?: "initial" | "manual_rerun" | "approved_run" | "suite_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
+  suiteId?: string; suiteRunId?: string; queuedAt?: string;
 }
 export interface TestSuite {
   id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;

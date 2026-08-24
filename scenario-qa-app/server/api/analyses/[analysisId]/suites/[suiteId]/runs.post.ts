@@ -39,11 +39,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: "스위트에 자동 실행할 수 없는 시나리오가 포함되어 있습니다." });
   }
 
+  const suiteRunId = createId("suite-run");
+  const queuedAt = new Date().toISOString();
   const values = scenarios.map(({ row, scenario }) => {
     const run: AutomatedTestRun = {
       id: createId("run"), analysisId, pageId: scenario.pageId, scenarioId: scenario.id, status: "pending",
       stepResults: [], consoleIssues: [], networkIssues: [], screenshotArtifactIds: [], trigger: "suite_run",
-      scenarioRevision: scenario.revision || 1, scenarioSnapshot: structuredClone(scenario)
+      scenarioRevision: scenario.revision || 1, scenarioSnapshot: structuredClone(scenario),
+      suiteId, suiteRunId, queuedAt
     };
     return { analysis_id: analysisId, test_id: row.id, user_id: analysis.user_id, source_id: run.id, status: "pending", payload: run };
   });
@@ -61,5 +64,5 @@ export default defineEventHandler(async (event) => {
   if (failedRows.length === runRows.length) throw createError({ statusCode: 502, statusMessage: failed.message });
 
   setResponseStatus(event, 202);
-  return { status: failedRows.length ? "partially_dispatched" : "dispatched", runIds: values.map((value) => value.source_id), failedCount: failedRows.length };
+  return { status: failedRows.length ? "partially_dispatched" : "dispatched", suiteRunId, runIds: values.map((value) => value.source_id), failedCount: failedRows.length };
 });
