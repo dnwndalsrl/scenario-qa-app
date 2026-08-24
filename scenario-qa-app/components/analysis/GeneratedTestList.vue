@@ -31,6 +31,7 @@ const busyId = ref("");
 const drafts = ref<Record<string, EditorDraft>>({});
 const aiInstructions = ref<Record<string, string>>({});
 const aiSummaries = ref<Record<string, string>>({});
+const aiDraftKinds = ref<Record<string, "instruction" | "failure_fix">>({});
 const feedback = ref("");
 const feedbackError = ref(false);
 const downloading = ref(false);
@@ -75,6 +76,13 @@ function stabilityTone(status: TestStabilityStatus) {
   return { stable: "success", flaky: "warning", consistently_failing: "failed", environment_affected: "warning", insufficient_data: "safe" }[status];
 }
 function runIsActive(testId: string) { return ["pending", "running"].includes(latestRun(testId)?.status || ""); }
+function runFailed(testId: string) { return ["failed", "error", "blocked"].includes(latestRun(testId)?.status || ""); }
+function fixedAfterFailure(testId: string) {
+  const related = props.runs.filter((run) => run.scenarioId === testId);
+  const latest = related.at(-1);
+  if (latest?.status !== "success") return false;
+  return related.slice(0, -1).some((run) => ["failed", "error", "blocked"].includes(run.status) && (run.scenarioRevision || 1) < (latest.scenarioRevision || 1));
+}
 function actionLabel(action: GeneratedTestAction) { return actions.find((item) => item.value === action)?.label || action; }
 function isAssertion(action: GeneratedTestAction) { return action.startsWith("assert_"); }
 function executionSteps(test: GeneratedTestScenario) { return test.steps.filter((step) => !isAssertion(step.action)); }
@@ -96,6 +104,7 @@ function defaultElementId() {
 }
 function startEdit(test: GeneratedTestScenario) {
   delete aiSummaries.value[test.id];
+  delete aiDraftKinds.value[test.id];
   drafts.value[test.id] = {
     title: test.title, description: test.description, purpose: test.purpose,
     steps: test.steps.map((step) => ({
@@ -120,16 +129,11 @@ async function createAiDraft(testId: string) {
     const request = await $api<{ requestId: string; status: "pending" }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft`, { method: "POST", body: { instruction } });
     feedbackError.value = false;
     feedback.value = "AI가 수정안을 만들고 있습니다. 완료되면 검토 화면을 엽니다.";
-    let result: { status: "pending" | "completed"; draft?: EditorDraft; summary?: string } | undefined;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 1500 : 3000));
-      const polled = await $api<{ status: "pending" | "completed"; draft?: EditorDraft; summary?: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft/${request.requestId}`);
-      result = polled;
-      if (polled.status === "completed") break;
-    }
+    const result = await waitForAiDraft(testId, request.requestId);
     if (!result?.draft || !result.summary) throw new Error("AI 수정안 생성이 지연되고 있습니다. 잠시 후 다시 요청해 주세요.");
     drafts.value[testId] = result.draft;
     aiSummaries.value[testId] = result.summary;
+    aiDraftKinds.value[testId] = "instruction";
     aiComposerId.value = "";
     editingId.value = testId;
     feedbackError.value = false;
@@ -139,13 +143,45 @@ async function createAiDraft(testId: string) {
     feedback.value = errorMessage(cause, "AI 수정안을 만들지 못했습니다.");
   } finally { busyId.value = ""; }
 }
+async function waitForAiDraft(testId: string, requestId: string) {
+  let result: { status: "pending" | "completed"; draft?: EditorDraft; summary?: string } | undefined;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 1500 : 3000));
+    result = await $api<{ status: "pending" | "completed"; draft?: EditorDraft; summary?: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft/${requestId}`);
+    if (result.status === "completed") break;
+  }
+  return result;
+}
+async function createFailureFixDraft(testId: string) {
+  busyId.value = testId;
+  feedback.value = "";
+  try {
+    const request = await $api<{ requestId: string; status: "pending" }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-fix-draft`, { method: "POST" });
+    feedbackError.value = false;
+    feedback.value = "AI가 실패 근거를 분석하고 수정안을 만들고 있습니다.";
+    const result = await waitForAiDraft(testId, request.requestId);
+    if (!result?.draft || !result.summary) throw new Error("실패 원인 수정안 생성이 지연되고 있습니다. 잠시 후 다시 요청해 주세요.");
+    drafts.value[testId] = result.draft;
+    aiSummaries.value[testId] = result.summary;
+    aiDraftKinds.value[testId] = "failure_fix";
+    editingId.value = testId;
+    feedbackError.value = false;
+    feedback.value = "실패 원인 수정안을 만들었습니다. 변경 전·후를 확인한 뒤 적용해 주세요.";
+  } catch (cause) {
+    feedbackError.value = true;
+    feedback.value = errorMessage(cause, "실패 원인 수정안을 만들지 못했습니다.");
+  } finally { busyId.value = ""; }
+}
 function startAdd() {
   drafts.value.__new = { title: "", description: "", purpose: "", steps: [{ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() }] };
   editingId.value = "__new";
   feedback.value = "";
 }
 function cancelEdit() {
-  if (editingId.value) delete aiSummaries.value[editingId.value];
+  if (editingId.value) {
+    delete aiSummaries.value[editingId.value];
+    delete aiDraftKinds.value[editingId.value];
+  }
   editingId.value = "";
 }
 function addStep(testId: string) {
@@ -178,22 +214,48 @@ async function downloadWorkbook() {
     feedback.value = errorMessage(cause, "엑셀 파일 다운로드에 실패했습니다.");
   } finally { downloading.value = false; }
 }
-async function save(testId: string) {
+function scenarioChanges(testId: string) {
+  const original = props.tests.find((test) => test.id === testId);
+  const draft = drafts.value[testId];
+  if (!original || !draft) return [];
+  const changes: Array<{ label: string; before: string; after: string }> = [];
+  if (original.title !== draft.title) changes.push({ label: "제목", before: original.title, after: draft.title });
+  const length = Math.max(original.steps.length, draft.steps.length);
+  for (let index = 0; index < length; index += 1) {
+    const before = original.steps[index];
+    const after = draft.steps[index];
+    const beforeText = before ? `${actionLabel(before.action)} · ${before.description}${before.expected ? ` · ${before.expected}` : ""}` : "없음";
+    const afterText = after ? `${actionLabel(after.action)} · ${after.description}${after.expected ? ` · ${after.expected}` : ""}` : "없음";
+    if (beforeText !== afterText || before?.elementId !== after?.elementId || before?.value !== after?.value) changes.push({ label: `${index + 1}단계`, before: beforeText, after: afterText });
+  }
+  return changes;
+}
+async function save(testId: string, rerunAfter = false) {
   const draft = drafts.value[testId];
   if (!draft) return;
   busyId.value = testId;
   feedback.value = "";
+  let saved = false;
   try {
     const target = testId === "__new" ? `/api/analyses/${props.analysisId}/tests` : `/api/analyses/${props.analysisId}/tests/${testId}`;
-    await $api(target, { method: testId === "__new" ? "POST" : "PUT", body: testId === "__new" ? { ...draft, pageId: props.snapshot.pageId || null } : draft });
+    const result = await $api<{ test?: GeneratedTestScenario }>(target, { method: testId === "__new" ? "POST" : "PUT", body: testId === "__new" ? { ...draft, pageId: props.snapshot.pageId || null } : draft });
+    saved = true;
     delete aiSummaries.value[testId];
+    delete aiDraftKinds.value[testId];
     editingId.value = "";
     feedbackError.value = false;
     feedback.value = "테스트 시나리오를 저장했습니다.";
+    if (rerunAfter && result.test?.safetyLevel === "safe" && result.test.autoExecutable) {
+      const run = await $api<{ runId: string; dispatchStatus?: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/runs`, { method: "POST" });
+      activeRunId.value = run.runId;
+      refreshDeadline = Date.now() + 10 * 60 * 1000;
+      feedback.value = run.dispatchStatus === "retrying" ? "수정안을 저장했고 실행 요청을 자동 재시도 중입니다." : "수정안을 저장하고 다시 실행했습니다.";
+      scheduleRefresh();
+    } else if (rerunAfter) feedback.value = "수정안은 저장했지만 안전 검토가 필요해 자동 실행하지 않았습니다.";
     emit("changed");
   } catch (cause) {
     feedbackError.value = true;
-    feedback.value = errorMessage(cause, "테스트 시나리오 저장에 실패했습니다.");
+    feedback.value = saved ? `수정안은 저장했지만 재실행 요청에 실패했습니다. ${errorMessage(cause, "잠시 후 다시 실행해 주세요.")}` : errorMessage(cause, "테스트 시나리오 저장에 실패했습니다.");
   } finally { busyId.value = ""; }
 }
 async function rerun(testId: string) {
@@ -256,17 +318,18 @@ onBeforeUnmount(stopRefresh);
             <section><h4>실행 단계</h4><ol class="steps scenario-steps"><li v-for="step in executionSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ step.description }}</span></li></ol></section>
             <section class="scenario-expectations"><h4>예상 결과</h4><ol class="steps scenario-steps"><li v-for="step in expectedSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ expectedLabel(step) }}</span></li></ol><p v-if="!expectedSteps(test).length" class="scenario-verification-warning">자동으로 판정할 예상 결과가 없어 실행 전 검토가 필요합니다.</p></section>
           </div>
-          <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${testRunStatusTone(latestRun(test.id)!)}`">{{ testRunStatusLabel(latestRun(test.id)!) }}</span><span class="tag" :class="`tag--${stabilityTone(stability(test.id).status)}`">{{ testStabilityLabel(stability(test.id).status) }}</span><span>최근 {{ stability(test.id).executionCount }}회 · 관찰 성공률 {{ stability(test.id).successRate }}%</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
+          <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${testRunStatusTone(latestRun(test.id)!)}`">{{ testRunStatusLabel(latestRun(test.id)!) }}</span><span v-if="fixedAfterFailure(test.id)" class="tag tag--success">수정 후 정상 확인</span><span class="tag" :class="`tag--${stabilityTone(stability(test.id).status)}`">{{ testStabilityLabel(stability(test.id).status) }}</span><span>최근 {{ stability(test.id).executionCount }}회 · 관찰 성공률 {{ stability(test.id).successRate }}%</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
           <form v-if="aiComposerId === test.id" class="scenario-ai-editor" @submit.prevent="createAiDraft(test.id)">
             <label :for="`ai-instruction-${test.id}`">어떻게 수정할까요?</label>
             <textarea :id="`ai-instruction-${test.id}`" v-model="aiInstructions[test.id]" required minlength="3" maxlength="1000" rows="3" placeholder="예: 클릭 후 다른 페이지로 이동하는지 URL까지 확인하도록 바꿔줘." />
             <p>AI가 현재 시나리오와 수집된 페이지 요소를 바탕으로 초안을 만듭니다. 자동 저장되지 않습니다.</p>
             <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="busyId === test.id" @click="aiComposerId = ''">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === test.id || (aiInstructions[test.id]?.trim().length || 0) < 3">{{ busyId === test.id ? '수정안 생성 중…' : 'AI 수정안 만들기' }}</button></div>
           </form>
-          <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="openAiComposer(test.id)">AI로 수정 요청</button><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">직접 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
+          <div class="scenario-actions"><button v-if="runFailed(test.id)" type="button" class="scenario-button scenario-button--fix" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="createFailureFixDraft(test.id)">{{ busyId === test.id ? '실패 근거 분석 중…' : '원인 분석·수정안 받기' }}</button><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="openAiComposer(test.id)">AI로 수정 요청</button><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">직접 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
         </template>
         <form v-else class="scenario-editor" @submit.prevent="save(test.id)">
-          <div v-if="aiSummaries[test.id]" class="scenario-ai-draft-notice"><strong>AI가 만든 검토 전 초안</strong><span>{{ aiSummaries[test.id] }}</span><small>대상 요소와 예상 결과를 확인한 뒤 저장해 주세요. 취소하면 기존 시나리오는 유지됩니다.</small></div>
+          <div v-if="aiSummaries[test.id]" class="scenario-ai-draft-notice"><strong>{{ aiDraftKinds[test.id] === 'failure_fix' ? '실패 근거로 만든 검토 전 수정안' : 'AI가 만든 검토 전 초안' }}</strong><span>{{ aiSummaries[test.id] }}</span><small>대상 요소와 예상 결과를 확인한 뒤 저장해 주세요. 취소하면 기존 시나리오는 유지됩니다.</small></div>
+          <div v-if="aiDraftKinds[test.id] === 'failure_fix' && scenarioChanges(test.id).length" class="scenario-ai-diff"><strong>변경 전·후</strong><div v-for="change in scenarioChanges(test.id)" :key="change.label" class="scenario-ai-diff__row"><b>{{ change.label }}</b><span><em>전</em>{{ change.before }}</span><span><em>후</em>{{ change.after }}</span></div></div>
           <label>제목<input v-model="drafts[test.id]!.title" required maxlength="160"></label>
           <label>설명<textarea v-model="drafts[test.id]!.description" maxlength="500" rows="2" /></label>
           <label>목적<textarea v-model="drafts[test.id]!.purpose" maxlength="500" rows="2" /></label>
@@ -280,7 +343,7 @@ onBeforeUnmount(stopRefresh);
             <label v-if="['assert_url','assert_title','assert_text','assert_scroll','assert_attribute','assert_value','assert_count'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500" :placeholder="step.action === 'assert_scroll' ? '#대상ID 또는 changed' : step.action === 'assert_count' ? '0 이상의 정수' : ''"></label>
             <button type="button" class="scenario-button" :disabled="drafts[test.id]!.steps.length === 1" @click="removeStep(test.id, index)">단계 삭제</button>
           </fieldset>
-          <div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep(test.id)">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" :disabled="busyId === test.id" @click="cancelEdit">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === test.id">{{ busyId === test.id ? '저장 중…' : '저장' }}</button></div>
+          <div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep(test.id)">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" :disabled="busyId === test.id" @click="cancelEdit">취소</button><button v-if="aiDraftKinds[test.id] === 'failure_fix'" type="button" class="scenario-button scenario-button--primary" :disabled="busyId === test.id" @click="save(test.id, true)">{{ busyId === test.id ? '저장 중…' : '저장 후 재실행' }}</button><button type="submit" class="scenario-button" :class="{ 'scenario-button--primary': aiDraftKinds[test.id] !== 'failure_fix' }" :disabled="busyId === test.id">{{ busyId === test.id ? '저장 중…' : '저장' }}</button></div>
         </form>
       </article>
     </div>

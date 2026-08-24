@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { GeneratedTestScenario, PageSnapshot } from "../shared/types/analysis";
 import { generateNaturalLanguageScenarioDraft } from "../server/services/natural-language-scenario-editor.service";
+import type { FailureFixContext } from "../server/services/failed-test-scenario-fix.service";
 import { uuidArg } from "./uuid-args";
 
 const args = process.argv.slice(2);
@@ -15,7 +16,7 @@ const client = createClient(url, key, { auth: { persistSession: false, autoRefre
 async function run() {
   const { data: testRow, error: testError } = await client.from("generated_tests").select("id,page_id,payload").eq("id", testId).eq("analysis_id", analysisId).single();
   if (testError || !testRow) throw new Error("Scenario edit target was not found");
-  const scenario = testRow.payload as GeneratedTestScenario & { aiEdit?: { requestId: string; status: string; instruction: string; requestedAt: string } };
+  const scenario = testRow.payload as GeneratedTestScenario & { aiEdit?: { requestId: string; status: string; instruction: string; requestedAt: string; failureContext?: FailureFixContext } };
   if (scenario.aiEdit?.requestId !== requestId || scenario.aiEdit.status !== "pending") throw new Error("Scenario edit request is no longer active");
 
   let snapshotQuery = client.from("page_snapshots").select("payload").eq("analysis_id", analysisId).order("created_at", { ascending: false }).limit(1);
@@ -25,7 +26,7 @@ async function run() {
   if (snapshotError || !snapshot) throw new Error("Scenario snapshot was not found");
 
   try {
-    const result = await generateNaturalLanguageScenarioDraft(scenario, snapshot, scenario.aiEdit.instruction);
+    const result = await generateNaturalLanguageScenarioDraft(scenario, snapshot, scenario.aiEdit.instruction, scenario.aiEdit.failureContext);
     const { data: latest } = await client.from("generated_tests").select("payload").eq("id", testId).single();
     const latestPayload = latest?.payload as typeof scenario | undefined;
     if (latestPayload?.aiEdit?.requestId !== requestId) return;
