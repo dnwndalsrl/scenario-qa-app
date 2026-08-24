@@ -26,8 +26,11 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ changed: [] }>();
 const { $api } = useNuxtApp();
 const editingId = ref("");
+const aiComposerId = ref("");
 const busyId = ref("");
 const drafts = ref<Record<string, EditorDraft>>({});
+const aiInstructions = ref<Record<string, string>>({});
+const aiSummaries = ref<Record<string, string>>({});
 const feedback = ref("");
 const feedbackError = ref(false);
 const downloading = ref(false);
@@ -92,6 +95,7 @@ function defaultElementId() {
   return props.snapshot.elements.find((element) => element.locatorCandidates.some((candidate) => candidate.unique))?.id;
 }
 function startEdit(test: GeneratedTestScenario) {
+  delete aiSummaries.value[test.id];
   drafts.value[test.id] = {
     title: test.title, description: test.description, purpose: test.purpose,
     steps: test.steps.map((step) => ({
@@ -102,12 +106,38 @@ function startEdit(test: GeneratedTestScenario) {
   editingId.value = test.id;
   feedback.value = "";
 }
+function openAiComposer(testId: string) {
+  aiComposerId.value = aiComposerId.value === testId ? "" : testId;
+  aiInstructions.value[testId] ||= "";
+  feedback.value = "";
+}
+async function createAiDraft(testId: string) {
+  const instruction = aiInstructions.value[testId]?.trim();
+  if (!instruction) return;
+  busyId.value = testId;
+  feedback.value = "";
+  try {
+    const result = await $api<{ draft: EditorDraft; summary: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft`, { method: "POST", body: { instruction } });
+    drafts.value[testId] = result.draft;
+    aiSummaries.value[testId] = result.summary;
+    aiComposerId.value = "";
+    editingId.value = testId;
+    feedbackError.value = false;
+    feedback.value = "AI 수정안을 만들었습니다. 내용을 검토한 뒤 저장해 주세요.";
+  } catch (cause) {
+    feedbackError.value = true;
+    feedback.value = errorMessage(cause, "AI 수정안을 만들지 못했습니다.");
+  } finally { busyId.value = ""; }
+}
 function startAdd() {
   drafts.value.__new = { title: "", description: "", purpose: "", steps: [{ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() }] };
   editingId.value = "__new";
   feedback.value = "";
 }
-function cancelEdit() { editingId.value = ""; }
+function cancelEdit() {
+  if (editingId.value) delete aiSummaries.value[editingId.value];
+  editingId.value = "";
+}
 function addStep(testId: string) {
   drafts.value[testId]?.steps.push({ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() });
 }
@@ -146,6 +176,7 @@ async function save(testId: string) {
   try {
     const target = testId === "__new" ? `/api/analyses/${props.analysisId}/tests` : `/api/analyses/${props.analysisId}/tests/${testId}`;
     await $api(target, { method: testId === "__new" ? "POST" : "PUT", body: testId === "__new" ? { ...draft, pageId: props.snapshot.pageId || null } : draft });
+    delete aiSummaries.value[testId];
     editingId.value = "";
     feedbackError.value = false;
     feedback.value = "테스트 시나리오를 저장했습니다.";
@@ -216,9 +247,16 @@ onBeforeUnmount(stopRefresh);
             <section class="scenario-expectations"><h4>예상 결과</h4><ol class="steps scenario-steps"><li v-for="step in expectedSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ expectedLabel(step) }}</span></li></ol><p v-if="!expectedSteps(test).length" class="scenario-verification-warning">자동으로 판정할 예상 결과가 없어 실행 전 검토가 필요합니다.</p></section>
           </div>
           <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${testRunStatusTone(latestRun(test.id)!)}`">{{ testRunStatusLabel(latestRun(test.id)!) }}</span><span class="tag" :class="`tag--${stabilityTone(stability(test.id).status)}`">{{ testStabilityLabel(stability(test.id).status) }}</span><span>최근 {{ stability(test.id).executionCount }}회 · 관찰 성공률 {{ stability(test.id).successRate }}%</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
-          <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">시나리오 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
+          <form v-if="aiComposerId === test.id" class="scenario-ai-editor" @submit.prevent="createAiDraft(test.id)">
+            <label :for="`ai-instruction-${test.id}`">어떻게 수정할까요?</label>
+            <textarea :id="`ai-instruction-${test.id}`" v-model="aiInstructions[test.id]" required minlength="3" maxlength="1000" rows="3" placeholder="예: 클릭 후 다른 페이지로 이동하는지 URL까지 확인하도록 바꿔줘." />
+            <p>AI가 현재 시나리오와 수집된 페이지 요소를 바탕으로 초안을 만듭니다. 자동 저장되지 않습니다.</p>
+            <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="busyId === test.id" @click="aiComposerId = ''">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === test.id || (aiInstructions[test.id]?.trim().length || 0) < 3">{{ busyId === test.id ? '수정안 생성 중…' : 'AI 수정안 만들기' }}</button></div>
+          </form>
+          <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="openAiComposer(test.id)">AI로 수정 요청</button><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">직접 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
         </template>
         <form v-else class="scenario-editor" @submit.prevent="save(test.id)">
+          <div v-if="aiSummaries[test.id]" class="scenario-ai-draft-notice"><strong>AI가 만든 검토 전 초안</strong><span>{{ aiSummaries[test.id] }}</span><small>대상 요소와 예상 결과를 확인한 뒤 저장해 주세요. 취소하면 기존 시나리오는 유지됩니다.</small></div>
           <label>제목<input v-model="drafts[test.id]!.title" required maxlength="160"></label>
           <label>설명<textarea v-model="drafts[test.id]!.description" maxlength="500" rows="2" /></label>
           <label>목적<textarea v-model="drafts[test.id]!.purpose" maxlength="500" rows="2" /></label>

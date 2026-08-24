@@ -3,14 +3,14 @@ import type { GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from ".
 import { enforceSafety } from "../analysis/services/test-safety.service";
 import { createId } from "../utils/id";
 
-const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_hidden", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "assert_attribute", "assert_value", "assert_count", "click", "fill", "select", "press", "check", "uncheck"]);
+export const generatedTestActionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_hidden", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "assert_attribute", "assert_value", "assert_count", "click", "fill", "select", "press", "check", "uncheck"]);
 
 export const updateGeneratedTestSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(500),
   purpose: z.string().trim().max(500),
   steps: z.array(z.object({
-    action: actionSchema,
+    action: generatedTestActionSchema,
     description: z.string().trim().min(1).max(300),
     elementId: z.string().trim().min(1).max(100).nullable().optional(),
     value: z.string().max(500).nullable().optional(),
