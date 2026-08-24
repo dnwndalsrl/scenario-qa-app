@@ -46,6 +46,8 @@ describe("scenario workbook", () => {
     expect(steps.getCell("G4").value).toBe("url-prefix:https://example.com/dashboard");
     expect(results.getCell("F2").value).toBe("https://example.com/dashboard");
     expect(results.getCell("G2").value).toBe("https://example.com/dashboard");
+    expect(scenarios.getCell("O2").value).toBe("데이터 부족");
+    expect(scenarios.getCell("P2").value).toBe(1);
   });
 
   it("분석 식별자가 포함된 안전한 파일명을 만든다", () => {

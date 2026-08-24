@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../../shared/types/analysis";
+import { revalidateIfNeeded } from "./test-revalidation";
 
 function env(name: string) { const value = process.env[name]; if (!value) throw new Error(`${name} is required`); return value; }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
@@ -39,8 +40,14 @@ export async function runApprovedTests(analysisId: string, options: { preserveAn
       const pageTests = testRows.filter((test) => test.page_id === pageId && runRows.some((run) => run.test_id === test.id));
       await client.from("test_runs").update({ status: "running" }).in("id", pageTests.map((test) => runRows.find((run) => run.test_id === test.id)!.id));
       const results = await executeGeneratedTests(snapshot, pageTests.map((test) => test.payload as GeneratedTestScenario));
-      for (const result of results) {
-        const testRow = pageTests.find((test) => test.source_id === result.scenarioId)!;
+      for (const firstResult of results) {
+        const testRow = pageTests.find((test) => test.source_id === firstResult.scenarioId)!;
+        const scenario = testRow.payload as GeneratedTestScenario;
+        const result = await revalidateIfNeeded(firstResult, async () => {
+          const [retry] = await executeGeneratedTests(snapshot, [scenario]);
+          if (!retry) throw new Error("Test revalidation returned no result");
+          return retry;
+        });
         const runRow = runRows.find((run) => run.test_id === testRow.id)!;
         const queued = runRow.payload as AutomatedTestRun;
         const completed: AutomatedTestRun = {
@@ -82,6 +89,7 @@ export async function runApprovedTests(analysisId: string, options: { preserveAn
 
 async function uploadArtifacts(client: SupabaseClient, userId: string, analysisId: string, run: AutomatedTestRun) {
   const sourceIds = new Set(run.screenshotArtifactIds);
+  for (const id of run.revalidation?.originalScreenshotArtifactIds || []) sourceIds.add(id);
   for (const step of run.stepResults) if (step.screenshotArtifactId) sourceIds.add(step.screenshotArtifactId);
   const { readArtifact } = await import("../../server/storage/artifact-store");
   for (const sourceId of sourceIds) {

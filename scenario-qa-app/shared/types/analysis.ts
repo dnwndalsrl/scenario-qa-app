@@ -123,12 +123,16 @@ export interface TestDispatchState {
   status: TestDispatchStatus; attemptCount: number; nextAttemptAt?: string; lastAttemptAt?: string;
   dispatchedAt?: string; lastError?: string;
 }
+export interface TestRevalidationResult {
+  attemptedAt: string; originalStatus: TestRunStatus; originalFailureKind?: TestFailureKind; originalMessage?: string;
+  originalScreenshotArtifactIds?: string[]; finalStatus: TestRunStatus; recovered: boolean;
+}
 export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
   trigger?: "initial" | "manual_rerun" | "approved_run" | "suite_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
-  suiteId?: string; suiteRunId?: string; retryOfSuiteRunId?: string; queuedAt?: string; dispatch?: TestDispatchState;
+  suiteId?: string; suiteRunId?: string; retryOfSuiteRunId?: string; queuedAt?: string; dispatch?: TestDispatchState; revalidation?: TestRevalidationResult;
 }
 export interface TestSuite {
   id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;

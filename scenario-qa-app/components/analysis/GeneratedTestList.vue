@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AutomatedTestRun, GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from "~/shared/types/analysis";
 import { testRunStatusLabel, testRunStatusTone } from "~/utils/test-run-status";
+import { testStabilityLabel, testStabilitySummary, type TestStabilityStatus } from "~/shared/utils/test-stability";
 import { uiLabel } from "~/utils/ui-label";
 
 interface EditableStep {
@@ -66,6 +67,10 @@ function elementLabel(id: string) {
 }
 function needsElement(action: GeneratedTestAction) { return !noElementActions.has(action); }
 function latestRun(testId: string) { return [...props.runs].reverse().find((run) => run.scenarioId === testId); }
+function stability(testId: string) { return testStabilitySummary(testId, props.runs); }
+function stabilityTone(status: TestStabilityStatus) {
+  return { stable: "success", flaky: "warning", consistently_failing: "failed", environment_affected: "warning", insufficient_data: "safe" }[status];
+}
 function runIsActive(testId: string) { return ["pending", "running"].includes(latestRun(testId)?.status || ""); }
 function actionLabel(action: GeneratedTestAction) { return actions.find((item) => item.value === action)?.label || action; }
 function isAssertion(action: GeneratedTestAction) { return action.startsWith("assert_"); }
@@ -210,7 +215,7 @@ onBeforeUnmount(stopRefresh);
             <section><h4>실행 단계</h4><ol class="steps scenario-steps"><li v-for="step in executionSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ step.description }}</span></li></ol></section>
             <section class="scenario-expectations"><h4>예상 결과</h4><ol class="steps scenario-steps"><li v-for="step in expectedSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ expectedLabel(step) }}</span></li></ol><p v-if="!expectedSteps(test).length" class="scenario-verification-warning">자동으로 판정할 예상 결과가 없어 실행 전 검토가 필요합니다.</p></section>
           </div>
-          <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${testRunStatusTone(latestRun(test.id)!)}`">{{ testRunStatusLabel(latestRun(test.id)!) }}</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
+          <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${testRunStatusTone(latestRun(test.id)!)}`">{{ testRunStatusLabel(latestRun(test.id)!) }}</span><span class="tag" :class="`tag--${stabilityTone(stability(test.id).status)}`">{{ testStabilityLabel(stability(test.id).status) }}</span><span>최근 {{ stability(test.id).executionCount }}회 · 관찰 성공률 {{ stability(test.id).successRate }}%</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
           <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">시나리오 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
         </template>
         <form v-else class="scenario-editor" @submit.prevent="save(test.id)">

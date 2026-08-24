@@ -171,6 +171,17 @@ h3 { margin: 0; font-size: 17px; }
 .scenario-button--download { border-color: #9aa8ba; background: #f8fafc; }
 .scenario-button--download::before { content: "↓"; margin-right: 6px; }
 .scenario-button:disabled { opacity: .5; cursor: not-allowed; }
+.scenario-button.is-active { border-color:#526277; background:#eef2f6; color:#14213a; }
+.stability-toolbar { display:grid; gap:12px; margin:0 0 22px; padding:16px 18px; border:1px solid #d8e1ed; border-radius:13px; background:#f8fafc; }
+.stability-toolbar>div:first-child { display:flex; align-items:baseline; gap:10px; }
+.stability-toolbar strong { font-size:14px; }
+.stability-toolbar span { color:var(--muted); font-size:12px; }
+.stability-filters { display:flex; flex-wrap:wrap; gap:7px; }
+.stability-filters .scenario-button { min-height:32px; padding:0 10px; font-size:12px; }
+.stability-empty { margin:0; padding:18px; border:1px dashed #cfd8e5; border-radius:12px; text-align:center; }
+.result-stability { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:13px 0 0 52px; color:var(--muted); font-size:12px; }
+.revalidation-note { margin:12px 0 0 52px; padding:10px 12px; border-radius:9px; background:#fff7e8; color:#805b12; font-size:12px; line-height:1.5; }
+.revalidation-note.is-recovered { background:#eef6f3; color:#256653; }
 .suite-panel { display:grid; gap:14px; margin-bottom:20px; padding:18px; border:1px solid #d8e1ed; border-radius:14px; background:#f8fafc; }
 .suite-panel__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 .suite-panel__head h3 { margin:0; font-size:16px; }
@@ -258,7 +269,7 @@ h3 { margin: 0; font-size: 17px; }
 @media (max-width: 680px) { .guide-steps { grid-template-columns:1fr; }.home-guide { padding:20px; }.analysis-form__head { align-items:flex-start; flex-direction:column; }.analysis-targets { padding:22px; }.analysis-form>.error-box { margin:0 22px 22px; } }
 @media (max-width: 680px) { .report-section { padding:20px; border-radius:18px; }.report-section>.section-head { align-items:flex-start; margin:-20px -20px 20px; padding:18px 20px; }.report-section>.section-head>div:first-child { padding-left:0; } }
 @media (max-width: 680px) { .regression-status { align-items:flex-start; flex-direction:column; }.regression-status__result { justify-content:flex-start; text-align:left; } }
-@media (max-width: 680px) { .scenario-card, .result-card { padding:18px; }.scenario-card>.test-meta, .scenario-card>.muted, .scenario-steps, .scenario-flow, .result-card__error { margin-left:0; padding-left:initial; }.scenario-card>.test-meta { padding-left:0; }.scenario-steps { padding:12px; }.scenario-steps li { grid-template-columns:22px 1fr; }.scenario-steps li span { grid-column:2; }.test-card__head { align-items:flex-start; }.scenario-card__identity { gap:10px; } }
+@media (max-width: 680px) { .scenario-card, .result-card { padding:18px; }.scenario-card>.test-meta, .scenario-card>.muted, .scenario-steps, .scenario-flow, .result-card__error, .result-stability, .revalidation-note { margin-left:0; padding-left:initial; }.scenario-card>.test-meta { padding-left:0; }.scenario-steps { padding:12px; }.scenario-steps li { grid-template-columns:22px 1fr; }.scenario-steps li span { grid-column:2; }.test-card__head { align-items:flex-start; }.scenario-card__identity { gap:10px; }.stability-toolbar>div:first-child { align-items:flex-start; flex-direction:column; gap:4px; } }
 @media (max-width: 680px) { .suite-panel__head, .suite-item__main, .suite-composer__controls { align-items:stretch; flex-direction:column; }.suite-checklist { grid-template-columns:1fr; }.suite-item .scenario-button { width:100%; }.suite-summary { align-items:flex-start; flex-wrap:wrap; }.suite-summary__metrics { width:100%; justify-content:space-between; }.suite-summary__meta { width:100%; margin-left:0!important; }.suite-history__runs li { grid-template-columns:42px minmax(0,1fr); }.suite-history__item>.scenario-button { justify-self:stretch; } }
 @media (max-width: 520px) { .grid--3, .summary-grid, .mini-grid { grid-template-columns: 1fr; }.url-control { flex-wrap:wrap; }.url-control__icon { display:none; }.url-control .primary-button { width:100%; }.document-upload { align-items:flex-start; flex-wrap:wrap; }.document-upload__action { width:100%; text-align:center; }.usage-summary { gap:16px; }.usage-summary span { padding-right:16px; } }
 @media (max-width: 620px) { .process-steps { grid-template-columns:1fr; } }

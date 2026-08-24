@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import type { AnalysisDetail, AutomatedTestRun, GeneratedTestScenario, GeneratedTestStep, PageSnapshot } from "../../shared/types/analysis";
 import { latestTestRuns } from "../../shared/utils/test-run-history";
+import { testStabilityLabel, testStabilitySummary } from "../../shared/utils/test-stability";
 import { uiLabel } from "../../utils/ui-label";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -100,19 +101,22 @@ function addSummarySheet(workbook: ExcelJS.Workbook, detail: AnalysisDetail) {
 
 function addScenarioSheet(workbook: ExcelJS.Workbook, detail: AnalysisDetail, runs: Map<string, AutomatedTestRun>) {
   const sheet = workbook.addWorksheet("테스트 시나리오");
-  addRow(sheet, ["시나리오 ID", "대상 화면/URL", "테스트 케이스명", "테스트 목적", "사전 조건", "우선순위", "테스트 유형", "안전 상태", "자동 실행", "신뢰도", "요구사항 ID", "작성 주체", "개정", "최종 결과"]);
+  addRow(sheet, ["시나리오 ID", "대상 화면/URL", "테스트 케이스명", "테스트 목적", "사전 조건", "우선순위", "테스트 유형", "안전 상태", "자동 실행", "신뢰도", "요구사항 ID", "작성 주체", "개정", "최종 결과", "실행 안정성", "최근 실행 수", "관찰 성공률", "자동 재검증 회복"]);
   detail.generatedTests.forEach((test) => {
     const run = runs.get(test.id);
     const snapshot = pageSnapshot(detail, test);
+    const stability = testStabilitySummary(test.id, detail.testRuns);
     addRow(sheet, [
       safeText(test.id), safeText(snapshot?.finalUrl || detail.analysis.normalizedUrl), safeText(test.title), safeText(test.purpose || test.description),
       "분석 대상 페이지에 접속할 수 있어야 함", test.safetyLevel === "safe" && test.autoExecutable ? "보통" : "검토",
       uiLabel(test.category), uiLabel(test.safetyLevel), test.autoExecutable ? "가능" : "검토 필요", Math.round(test.confidence * 100) / 100,
-      safeText(test.requirementIds?.join(", ")), test.source === "user" ? "사용자" : "AI 제안", test.revision || 1, run ? uiLabel(run.status) : "미실행"
+      safeText(test.requirementIds?.join(", ")), test.source === "user" ? "사용자" : "AI 제안", test.revision || 1, run ? uiLabel(run.status) : "미실행",
+      testStabilityLabel(stability.status), stability.executionCount, stability.observationCount ? stability.successRate / 100 : "", stability.recoveredCount
     ]);
   });
   sheet.getColumn(10).numFmt = "0%";
-  styleTable(sheet, [24, 38, 32, 42, 34, 12, 16, 14, 14, 12, 22, 14, 10, 14]);
+  sheet.getColumn(17).numFmt = "0%";
+  styleTable(sheet, [24, 38, 32, 42, 34, 12, 16, 14, 14, 12, 22, 14, 10, 14, 16, 14, 14, 18]);
 }
 
 function addStepSheet(workbook: ExcelJS.Workbook, detail: AnalysisDetail) {
@@ -129,19 +133,20 @@ function addStepSheet(workbook: ExcelJS.Workbook, detail: AnalysisDetail) {
 
 function addResultSheet(workbook: ExcelJS.Workbook, detail: AnalysisDetail, runs: Map<string, AutomatedTestRun>) {
   const sheet = workbook.addWorksheet("실행 결과");
-  addRow(sheet, ["시나리오 ID", "실행 ID", "단계", "동작", "판정", "예상", "실제", "오류/비고", "시작", "완료", "소요(ms)"]);
+  addRow(sheet, ["시나리오 ID", "실행 ID", "단계", "동작", "판정", "예상", "실제", "오류/비고", "시작", "완료", "소요(ms)", "자동 재검증"]);
   detail.generatedTests.forEach((test) => {
     const run = runs.get(test.id);
     if (!run?.stepResults.length) {
-      addRow(sheet, [safeText(test.id), safeText(run?.id), "", "", run ? uiLabel(run.status) : "미실행", "", "", safeText(run?.error?.message), run?.startedAt || "", run?.completedAt || "", run?.durationMs ?? ""]);
+      addRow(sheet, [safeText(test.id), safeText(run?.id), "", "", run ? uiLabel(run.status) : "미실행", "", "", safeText(run?.error?.message), run?.startedAt || "", run?.completedAt || "", run?.durationMs ?? "", run?.revalidation ? (run.revalidation.recovered ? "재검증 후 회복" : "재검증 후 동일 오류") : ""]);
       return;
     }
     run.stepResults.slice().sort((a, b) => a.order - b.order).forEach((step) => addRow(sheet, [
       safeText(test.id), safeText(run.id), step.order, actionLabel(step.action), uiLabel(step.status), safeText(step.expected), safeText(step.actual),
-      safeText(step.errorMessage || (step.failureKind ? uiLabel(step.failureKind) : "")), step.startedAt || "", step.completedAt || "", step.durationMs ?? ""
+      safeText(step.errorMessage || (step.failureKind ? uiLabel(step.failureKind) : "")), step.startedAt || "", step.completedAt || "", step.durationMs ?? "",
+      run.revalidation ? (run.revalidation.recovered ? "재검증 후 회복" : "재검증 후 동일 오류") : ""
     ]));
   });
-  styleTable(sheet, [24, 24, 8, 22, 14, 38, 38, 42, 22, 22, 14]);
+  styleTable(sheet, [24, 24, 8, 22, 14, 38, 38, 42, 22, 22, 14, 20]);
 }
 
 export async function buildScenarioWorkbook(detail: AnalysisDetail): Promise<Buffer> {
