@@ -43,6 +43,11 @@ export async function dispatchApprovedTestsWorkflow(analysisId: string, config: 
   await dispatchWorkflow({ analysis_id: analysisId, mode: "approved_tests", test_id: "", test_run_id: "" }, config, fetcher);
 }
 
+export async function dispatchSuiteTestsWorkflow(analysisId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {
+  if (!uuidPattern.test(analysisId)) throw new Error("Invalid analysis id");
+  await dispatchWorkflow({ analysis_id: analysisId, mode: "suite_tests", test_id: "", test_run_id: "" }, config, fetcher);
+}
+
 export async function latestWorkflowRun(config: GitHubDispatchConfig, workflowId: string, fetcher: typeof fetch = fetch): Promise<GitHubWorkflowRun | undefined> {
   const base = workflowDispatchUrl({ ...config, workflowId }).replace(/\/dispatches$/, "/runs");
   const response = await fetcher(`${base}?branch=${encodeURIComponent(config.ref)}&per_page=1`, {

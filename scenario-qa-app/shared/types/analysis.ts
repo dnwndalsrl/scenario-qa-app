@@ -122,7 +122,10 @@ export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
-  trigger?: "initial" | "manual_rerun" | "approved_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
+  trigger?: "initial" | "manual_rerun" | "approved_run" | "suite_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
+}
+export interface TestSuite {
+  id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {

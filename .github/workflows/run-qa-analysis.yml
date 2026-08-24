@@ -16,6 +16,7 @@ on:
           - analysis
           - single_test
           - approved_tests
+          - suite_tests
       test_id:
         description: Supabase generated_tests UUID for single_test mode
         required: false
@@ -76,6 +77,9 @@ jobs:
       - name: Run approved QA tests
         if: inputs.mode == 'approved_tests'
         run: npm run qa:run-approved -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Run test suite
+        if: inputs.mode == 'suite_tests'
+        run: npm run qa:run-suite -- --analysis-id=${{ inputs.analysis_id }}
       - name: Mark interrupted analysis failed
         if: failure() && inputs.mode == 'analysis'
         run: npm run qa:mark-failed -- --analysis-id=${{ inputs.analysis_id }}
@@ -85,6 +89,9 @@ jobs:
       - name: Mark interrupted approved tests failed
         if: failure() && inputs.mode == 'approved_tests'
         run: npm run qa:mark-approved-failed -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Mark interrupted test suite failed
+        if: failure() && inputs.mode == 'suite_tests'
+        run: npm run qa:mark-suite-failed -- --analysis-id=${{ inputs.analysis_id }}
       - name: Upload short-lived diagnostic artifact
         if: always()
         uses: actions/upload-artifact@v4

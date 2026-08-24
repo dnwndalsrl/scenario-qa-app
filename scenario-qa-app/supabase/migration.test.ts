@@ -14,6 +14,7 @@ const dispatchStateFixSql = readFileSync(new URL("./migrations/202608110003_fix_
 const generatedTestEditorSql = readFileSync(new URL("./migrations/202608110004_generated_test_editor_permissions.sql", import.meta.url), "utf8");
 const authenticatedScenarioEditorSql = readFileSync(new URL("./migrations/202608110005_authenticated_scenario_editor.sql", import.meta.url), "utf8");
 const scenarioTestDispatchSql = readFileSync(new URL("./migrations/202608110006_scenario_test_dispatch_rpc.sql", import.meta.url), "utf8");
+const testSuitesSql = readFileSync(new URL("./migrations/202608240001_test_suites.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -104,5 +105,11 @@ describe("Supabase migration security", () => {
     expect(dispatchStateFixSql).toContain("status = p_status::public.analysis_status");
     expect(dispatchStateFixSql).toContain("user_id = auth.uid()");
     expect(dispatchStateFixSql).toContain("grant execute on function public.set_analysis_dispatch_state(uuid,text,text,text,jsonb) to authenticated");
+  });
+  it("stores user-owned test suites behind RLS", () => {
+    expect(testSuitesSql).toContain("create table if not exists public.test_suites");
+    expect(testSuitesSql).toContain("alter table public.test_suites enable row level security");
+    expect(testSuitesSql.match(/user_id = auth\.uid\(\)/g)).toHaveLength(5);
+    expect(testSuitesSql).toContain("grant select, insert, update, delete on table public.test_suites to authenticated");
   });
 });

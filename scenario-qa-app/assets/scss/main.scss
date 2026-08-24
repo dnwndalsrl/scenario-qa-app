@@ -171,6 +171,27 @@ h3 { margin: 0; font-size: 17px; }
 .scenario-button--download { border-color: #9aa8ba; background: #f8fafc; }
 .scenario-button--download::before { content: "↓"; margin-right: 6px; }
 .scenario-button:disabled { opacity: .5; cursor: not-allowed; }
+.suite-panel { display:grid; gap:14px; margin-bottom:20px; padding:18px; border:1px solid #d8e1ed; border-radius:14px; background:#f8fafc; }
+.suite-panel__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.suite-panel__head h3 { margin:0; font-size:16px; }
+.suite-panel__head p, .suite-item p, .suite-panel__hint { margin:5px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+.suite-panel__empty { padding:14px; border:1px dashed #cfd8e5; border-radius:10px; color:var(--muted); font-size:13px; text-align:center; background:#fff; }
+.suite-list { display:grid; gap:8px; }
+.suite-item { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 14px; border:1px solid #dde4ee; border-radius:11px; background:#fff; }
+.suite-item>div { min-width:0; }
+.suite-item p { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.suite-item__title { display:flex; align-items:center; gap:9px; }
+.suite-item__title span { color:var(--muted); font-size:11px; }
+.suite-composer { display:grid; gap:13px; padding-top:14px; border-top:1px solid #d8e1ed; }
+.suite-composer__controls { display:flex; align-items:end; gap:10px; }
+.suite-composer__controls label { display:grid; flex:1; gap:6px; font-size:12px; font-weight:750; }
+.suite-composer__controls input { min-height:40px; padding:0 12px; border:1px solid var(--line); border-radius:9px; background:#fff; }
+.suite-checklist { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.suite-checklist label { display:flex; align-items:flex-start; gap:9px; padding:11px; border:1px solid #dde4ee; border-radius:10px; background:#fff; cursor:pointer; }
+.suite-checklist input { margin-top:3px; }
+.suite-checklist span { display:grid; min-width:0; gap:3px; }
+.suite-checklist strong { font-size:12px; line-height:1.4; }
+.suite-checklist small { overflow:hidden; color:var(--muted); font-size:11px; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
 .scenario-run { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 14px; color: var(--muted); font-size: 12px; }
 .scenario-editor { display: grid; gap: 12px; }
 .scenario-editor label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -207,5 +228,6 @@ h3 { margin: 0; font-size: 17px; }
 @media (max-width: 680px) { .report-section { padding:20px; border-radius:18px; }.report-section>.section-head { align-items:flex-start; margin:-20px -20px 20px; padding:18px 20px; }.report-section>.section-head>div:first-child { padding-left:0; } }
 @media (max-width: 680px) { .regression-status { align-items:flex-start; flex-direction:column; }.regression-status__result { justify-content:flex-start; text-align:left; } }
 @media (max-width: 680px) { .scenario-card, .result-card { padding:18px; }.scenario-card>.test-meta, .scenario-card>.muted, .scenario-steps, .scenario-flow, .result-card__error { margin-left:0; padding-left:initial; }.scenario-card>.test-meta { padding-left:0; }.scenario-steps { padding:12px; }.scenario-steps li { grid-template-columns:22px 1fr; }.scenario-steps li span { grid-column:2; }.test-card__head { align-items:flex-start; }.scenario-card__identity { gap:10px; } }
+@media (max-width: 680px) { .suite-panel__head, .suite-item, .suite-composer__controls { align-items:stretch; flex-direction:column; }.suite-checklist { grid-template-columns:1fr; }.suite-item .scenario-button { width:100%; } }
 @media (max-width: 520px) { .grid--3, .summary-grid, .mini-grid { grid-template-columns: 1fr; }.url-control { flex-wrap:wrap; }.url-control__icon { display:none; }.url-control .primary-button { width:100%; }.document-upload { align-items:flex-start; flex-wrap:wrap; }.document-upload__action { width:100%; text-align:center; }.usage-summary { gap:16px; }.usage-summary span { padding-right:16px; } }
 @media (max-width: 620px) { .process-steps { grid-template-columns:1fr; } }
