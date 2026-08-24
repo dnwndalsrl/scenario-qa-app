@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeneratedTestScenario, PageSnapshot } from "../../shared/types/analysis";
-import { validateNaturalLanguageScenarioDraft } from "./natural-language-scenario-editor.service";
+import { naturalLanguageEditorElements, validateNaturalLanguageScenarioDraft } from "./natural-language-scenario-editor.service";
 
 const snapshot = {
   id: "snapshot-1", analysisId: "analysis-1", requestedUrl: "https://example.com", finalUrl: "https://example.com", title: "Example",
@@ -14,6 +14,11 @@ const existing = {
 } as GeneratedTestScenario;
 
 describe("natural language scenario editor", () => {
+  it("only gives the AI elements that the scenario editor can execute", () => {
+    const elements = naturalLanguageEditorElements({ ...snapshot, elements: [...snapshot.elements, { ...snapshot.elements[0]!, id: "element-2", locatorCandidates: [] }] });
+    expect(elements.map((element) => element.id)).toEqual(["element-1"]);
+  });
+
   it("returns an editable draft only after the existing scenario validator accepts it", () => {
     const result = validateNaturalLanguageScenarioDraft(existing, snapshot, {
       summary: "URL 이동 검증을 섹션 스크롤 검증으로 바꿨습니다.",
