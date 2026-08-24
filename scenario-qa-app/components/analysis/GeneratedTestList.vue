@@ -117,7 +117,17 @@ async function createAiDraft(testId: string) {
   busyId.value = testId;
   feedback.value = "";
   try {
-    const result = await $api<{ draft: EditorDraft; summary: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft`, { method: "POST", body: { instruction } });
+    const request = await $api<{ requestId: string; status: "pending" }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft`, { method: "POST", body: { instruction } });
+    feedbackError.value = false;
+    feedback.value = "AI가 수정안을 만들고 있습니다. 완료되면 검토 화면을 엽니다.";
+    let result: { status: "pending" | "completed"; draft?: EditorDraft; summary?: string } | undefined;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 1500 : 3000));
+      const polled = await $api<{ status: "pending" | "completed"; draft?: EditorDraft; summary?: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/ai-draft/${request.requestId}`);
+      result = polled;
+      if (polled.status === "completed") break;
+    }
+    if (!result?.draft || !result.summary) throw new Error("AI 수정안 생성이 지연되고 있습니다. 잠시 후 다시 요청해 주세요.");
     drafts.value[testId] = result.draft;
     aiSummaries.value[testId] = result.summary;
     aiComposerId.value = "";

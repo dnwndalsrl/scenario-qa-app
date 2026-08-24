@@ -1,7 +1,9 @@
-import type { GeneratedTestScenario, PageSnapshot } from "../../../../../../shared/types/analysis";
+import { randomUUID } from "node:crypto";
+import type { GeneratedTestScenario } from "../../../../../../shared/types/analysis";
 import { getOwnedAnalysis } from "../../../../../services/analysis-records.service";
 import { getGeneratedTestRow } from "../../../../../services/generated-test-record.service";
-import { generateNaturalLanguageScenarioDraft, naturalLanguageScenarioRequestSchema } from "../../../../../services/natural-language-scenario-editor.service";
+import { dispatchScenarioEditWorkflow, githubConfigFromRuntime } from "../../../../../services/github-actions.service";
+import { naturalLanguageScenarioRequestSchema } from "../../../../../services/natural-language-scenario-editor.service";
 import { requireUser } from "../../../../../services/supabase.service";
 
 export default defineEventHandler(async (event) => {
@@ -17,11 +19,19 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "수정 요청을 3자 이상 입력해 주세요." });
   const testRow = await getGeneratedTestRow(client, analysisId, testId);
 
-  let snapshotQuery = client.from("page_snapshots").select("payload").eq("analysis_id", analysisId).order("created_at", { ascending: false }).limit(1);
-  snapshotQuery = testRow.page_id ? snapshotQuery.eq("page_id", testRow.page_id) : snapshotQuery.is("page_id", null);
-  const { data: snapshotRows, error: snapshotError } = await snapshotQuery;
-  const snapshot = snapshotRows?.[0]?.payload as PageSnapshot | undefined;
-  if (snapshotError || !snapshot) throw createError({ statusCode: 409, statusMessage: "테스트 대상 페이지 스냅샷을 찾을 수 없습니다." });
+  const requestId = randomUUID();
+  const scenario = testRow.payload as GeneratedTestScenario & { aiEdit?: Record<string, unknown> };
+  const aiEdit = { requestId, status: "pending", instruction: parsed.data.instruction, requestedAt: new Date().toISOString() };
+  const { error: updateError } = await client.from("generated_tests").update({ payload: { ...scenario, aiEdit } }).eq("id", testRow.id);
+  if (updateError) throw createError({ statusCode: 500, statusMessage: "AI 수정 요청을 저장하지 못했습니다." });
 
-  return generateNaturalLanguageScenarioDraft(testRow.payload as GeneratedTestScenario, snapshot, parsed.data.instruction);
+  try {
+    await dispatchScenarioEditWorkflow(analysisId, testRow.id, requestId, githubConfigFromRuntime(useRuntimeConfig(event)));
+  } catch (cause) {
+    await client.from("generated_tests").update({ payload: { ...scenario, aiEdit: { ...aiEdit, status: "failed", error: "AI 수정 실행기를 시작하지 못했습니다." } } }).eq("id", testRow.id);
+    throw createError({ statusCode: 502, statusMessage: "AI 수정 실행기를 시작하지 못했습니다.", cause });
+  }
+
+  setResponseStatus(event, 202);
+  return { requestId, status: "pending" };
 });

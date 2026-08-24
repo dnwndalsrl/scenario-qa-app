@@ -48,6 +48,11 @@ export async function dispatchSuiteTestsWorkflow(analysisId: string, config: Git
   await dispatchWorkflow({ analysis_id: analysisId, mode: "suite_tests", test_id: "", test_run_id: "" }, config, fetcher);
 }
 
+export async function dispatchScenarioEditWorkflow(analysisId: string, testId: string, requestId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {
+  if (![analysisId, testId, requestId].every((id) => uuidPattern.test(id))) throw new Error("Invalid scenario edit workflow id");
+  await dispatchWorkflow({ analysis_id: analysisId, mode: "scenario_edit", test_id: testId, test_run_id: requestId }, config, fetcher);
+}
+
 export async function latestWorkflowRun(config: GitHubDispatchConfig, workflowId: string, fetcher: typeof fetch = fetch): Promise<GitHubWorkflowRun | undefined> {
   const base = workflowDispatchUrl({ ...config, workflowId }).replace(/\/dispatches$/, "/runs");
   const response = await fetcher(`${base}?branch=${encodeURIComponent(config.ref)}&per_page=1`, {

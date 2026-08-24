@@ -17,6 +17,7 @@ on:
           - single_test
           - approved_tests
           - suite_tests
+          - scenario_edit
       test_id:
         description: Supabase generated_tests UUID for single_test mode
         required: false
@@ -80,6 +81,9 @@ jobs:
       - name: Run test suite
         if: inputs.mode == 'suite_tests'
         run: npm run qa:run-suite -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Create scenario edit draft
+        if: inputs.mode == 'scenario_edit'
+        run: npm run qa:edit-scenario -- --analysis-id=${{ inputs.analysis_id }} --test-id=${{ inputs.test_id }} --request-id=${{ inputs.test_run_id }}
       - name: Mark interrupted analysis failed
         if: failure() && inputs.mode == 'analysis'
         run: npm run qa:mark-failed -- --analysis-id=${{ inputs.analysis_id }}
