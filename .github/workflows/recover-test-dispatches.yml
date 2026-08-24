@@ -1,0 +1,28 @@
+name: Recover test dispatches
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-qa-dispatch-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      APP_URL: ${{ vars.PROBE_QA_APP_URL || 'https://scenario-qa-app.vercel.app' }}
+      RECOVERY_SECRET: ${{ secrets.DISPATCH_RECOVERY_SECRET }}
+    steps:
+      - name: Process due test dispatches
+        run: |
+          test -n "$RECOVERY_SECRET"
+          curl --fail-with-body --retry 2 --retry-delay 5 \
+            --request POST "$APP_URL/api/internal/test-dispatches/recover" \
+            --header "Authorization: Bearer $RECOVERY_SECRET"

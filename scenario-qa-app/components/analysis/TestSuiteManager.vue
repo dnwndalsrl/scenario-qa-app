@@ -2,6 +2,7 @@
 import type { AutomatedTestRun, GeneratedTestScenario, TestSuite } from "~/shared/types/analysis";
 import type { TestSuiteRunSummary } from "~/shared/utils/test-suite-summary";
 import { testSuiteRunSummaries } from "~/shared/utils/test-suite-summary";
+import { testRunStatusLabel, testRunStatusTone } from "~/utils/test-run-status";
 
 const props = withDefaults(defineProps<{
   analysisId: string;
@@ -41,9 +42,6 @@ function suiteTestTitles(suite: TestSuite) {
 }
 function summaryStatus(status: "running" | "success" | "failed" | "error") {
   return { running: "실행 중", success: "성공", failed: "실패", error: "오류" }[status];
-}
-function runStatus(status: AutomatedTestRun["status"]) {
-  return { pending: "대기", running: "실행 중", success: "성공", failed: "실패", blocked: "차단", error: "오류" }[status];
 }
 function scenarioTitle(scenarioId: string) {
   return props.tests.find((test) => test.id === scenarioId)?.title || "삭제되었거나 변경된 시나리오";
@@ -96,12 +94,12 @@ async function runSuite(suite: TestSuite, retrySummary?: TestSuiteRunSummary) {
     const options = retrySummary
       ? { method: "POST", body: { retrySuiteRunId: retrySummary.suiteRunId } }
       : { method: "POST" };
-    const result = await apiRequest<{ runIds: string[]; failedCount?: number; retriedCount?: number }>(`/api/analyses/${props.analysisId}/suites/${suite.id}/runs`, options);
+    const result = await apiRequest<{ runIds: string[]; retryingCount?: number; retriedCount?: number }>(`/api/analyses/${props.analysisId}/suites/${suite.id}/runs`, options);
     activeRunIds.value = result.runIds;
     refreshDeadline = Date.now() + 10 * 60 * 1000;
-    feedbackError.value = Boolean(result.failedCount);
-    feedback.value = result.failedCount
-      ? `‘${suite.name}’ 중 ${result.failedCount}개 테스트 요청에 실패했습니다. 나머지 테스트는 실행합니다.`
+    feedbackError.value = false;
+    feedback.value = result.retryingCount
+      ? `‘${suite.name}’ 중 ${result.retryingCount}개 요청은 자동 재시도를 기다리고 있습니다.`
       : retrySummary
         ? `‘${suite.name}’의 실패·오류 테스트 ${result.retriedCount || result.runIds.length}개를 다시 실행합니다.`
         : `‘${suite.name}’ 스위트를 실행 대기열에 등록했습니다.`;
@@ -122,7 +120,7 @@ function stopRefresh() {
   refreshTimer = undefined;
   activeRunIds.value = [];
 }
-watch(() => props.runs.map((run) => `${run.id}:${run.status}`).join("|"), () => {
+watch(() => props.runs.map((run) => `${run.id}:${run.status}:${run.dispatch?.status}`).join("|"), () => {
   if (!activeRunIds.value.length) return;
   const activeRuns = activeRunIds.value.map((id) => props.runs.find((run) => run.id === id));
   if (activeRuns.every((run) => run && !["pending", "running"].includes(run.status))) stopRefresh();
@@ -175,7 +173,7 @@ onBeforeUnmount(stopRefresh);
               </div>
               <ul class="suite-history__runs">
                 <li v-for="run in summary.runs" :key="run.id">
-                  <span class="suite-run-status" :class="`suite-run-status--${run.status}`">{{ runStatus(run.status) }}</span>
+                  <span class="suite-run-status" :class="`suite-run-status--${testRunStatusTone(run)}`">{{ testRunStatusLabel(run) }}</span>
                   <strong>{{ scenarioTitle(run.scenarioId) }}</strong>
                   <small v-if="['failed', 'error', 'blocked'].includes(run.status)">{{ runMessage(run) }}</small>
                 </li>

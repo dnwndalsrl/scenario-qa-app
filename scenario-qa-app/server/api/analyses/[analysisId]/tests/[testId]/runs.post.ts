@@ -2,8 +2,9 @@ import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../.
 import { ensureScenarioAssertions } from "../../../../../analysis/services/scenario-verification.service";
 import { getOwnedAnalysis } from "../../../../../services/analysis-records.service";
 import { getGeneratedTestRow } from "../../../../../services/generated-test-record.service";
-import { dispatchTestWorkflow, githubConfigFromRuntime } from "../../../../../services/github-actions.service";
+import { githubConfigFromRuntime } from "../../../../../services/github-actions.service";
 import { requireUser } from "../../../../../services/supabase.service";
+import { attemptTestRunDispatch, initialDispatchState } from "../../../../../services/test-dispatch-queue.service";
 import { createId } from "../../../../../utils/id";
 
 export default defineEventHandler(async (event) => {
@@ -31,10 +32,12 @@ export default defineEventHandler(async (event) => {
   if (activeRuns?.length) throw createError({ statusCode: 409, statusMessage: "이 테스트는 이미 실행 중입니다." });
 
   const sourceId = createId("run");
+  const queuedAt = new Date().toISOString();
   const queued: AutomatedTestRun = {
     id: sourceId, analysisId, pageId: scenario.pageId, scenarioId: scenario.id,
     status: "pending", stepResults: [], consoleIssues: [], networkIssues: [], screenshotArtifactIds: [],
-    trigger: "manual_rerun", scenarioRevision: scenario.revision || 1, scenarioSnapshot: structuredClone(scenario)
+    trigger: "manual_rerun", scenarioRevision: scenario.revision || 1, scenarioSnapshot: structuredClone(scenario),
+    queuedAt, dispatch: initialDispatchState(queuedAt)
   };
   const { data: runRow, error: runError } = await admin.from("test_runs").insert({
     analysis_id: analysisId, test_id: testRow.id, user_id: analysis.user_id,
@@ -42,14 +45,10 @@ export default defineEventHandler(async (event) => {
   }).select("id").single();
   if (runError || !runRow) throw createError({ statusCode: 500, statusMessage: "개별 테스트 실행 기록을 만들지 못했습니다." });
 
-  try {
-    await dispatchTestWorkflow(analysisId, testRow.id, runRow.id, githubConfigFromRuntime(useRuntimeConfig(event)));
-  } catch {
-    const failed = { ...queued, status: "error" as const, completedAt: new Date().toISOString(), error: { code: "WORKFLOW_DISPATCH_FAILED", message: "GitHub Actions 실행 요청에 실패했습니다." } };
-    await admin.from("test_runs").update({ status: "error", payload: failed }).eq("id", runRow.id);
-    throw createError({ statusCode: 502, statusMessage: "GitHub Actions 실행 요청에 실패했습니다." });
-  }
+  const dispatchStatus = await attemptTestRunDispatch(admin, {
+    id: runRow.id, analysis_id: analysisId, test_id: testRow.id, payload: queued
+  }, githubConfigFromRuntime(useRuntimeConfig(event)));
 
   setResponseStatus(event, 202);
-  return { runId: sourceId, status: "pending" };
+  return { runId: sourceId, status: "pending", dispatchStatus };
 });

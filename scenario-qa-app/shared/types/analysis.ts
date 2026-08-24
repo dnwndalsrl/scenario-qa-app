@@ -118,12 +118,17 @@ export interface AutomatedStepResult {
   currentUrl?: string; screenshotArtifactId?: string; errorMessage?: string; failureKind?: TestFailureKind; locatorUsed?: LocatorCandidate;
   startedAt?: string; completedAt?: string; durationMs?: number;
 }
+export type TestDispatchStatus = "queued" | "dispatching" | "retrying" | "dispatched" | "exhausted";
+export interface TestDispatchState {
+  status: TestDispatchStatus; attemptCount: number; nextAttemptAt?: string; lastAttemptAt?: string;
+  dispatchedAt?: string; lastError?: string;
+}
 export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
   trigger?: "initial" | "manual_rerun" | "approved_run" | "suite_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
-  suiteId?: string; suiteRunId?: string; retryOfSuiteRunId?: string; queuedAt?: string;
+  suiteId?: string; suiteRunId?: string; retryOfSuiteRunId?: string; queuedAt?: string; dispatch?: TestDispatchState;
 }
 export interface TestSuite {
   id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;

@@ -12,6 +12,7 @@ export default defineNuxtConfig({
     githubRepo: process.env.GITHUB_REPOSITORY ?? process.env.GITHUB_REPO ?? "",
     githubWorkflowId: process.env.GITHUB_WORKFLOW_FILE ?? process.env.GITHUB_WORKFLOW_ID ?? "run-qa-analysis.yml",
     githubWorkflowRef: process.env.GITHUB_DEPLOY_BRANCH ?? process.env.GITHUB_WORKFLOW_REF ?? "main",
+    dispatchRecoverySecret: process.env.DISPATCH_RECOVERY_SECRET ?? process.env.CRON_SECRET ?? "",
     public: {
       pollingIntervalMs: 3000,
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",

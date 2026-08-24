@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AutomatedTestRun, GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from "~/shared/types/analysis";
+import { testRunStatusLabel, testRunStatusTone } from "~/utils/test-run-status";
 import { uiLabel } from "~/utils/ui-label";
 
 interface EditableStep {
@@ -153,11 +154,13 @@ async function rerun(testId: string) {
   busyId.value = testId;
   feedback.value = "";
   try {
-    const result = await $api<{ runId: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/runs`, { method: "POST" });
+    const result = await $api<{ runId: string; dispatchStatus?: string }>(`/api/analyses/${props.analysisId}/tests/${testId}/runs`, { method: "POST" });
     activeRunId.value = result.runId;
     refreshDeadline = Date.now() + 10 * 60 * 1000;
     feedbackError.value = false;
-    feedback.value = "개별 테스트를 실행 대기열에 등록했습니다.";
+    feedback.value = result.dispatchStatus === "retrying"
+      ? "실행 요청이 일시적으로 실패해 자동 재시도 대기열에 등록했습니다."
+      : "개별 테스트를 실행 대기열에 등록했습니다.";
     emit("changed");
     scheduleRefresh();
   } catch (cause) {
@@ -178,7 +181,7 @@ function stopRefresh() {
   refreshTimer = undefined;
   activeRunId.value = "";
 }
-watch(() => props.runs.map((run) => `${run.id}:${run.status}`).join("|"), () => {
+watch(() => props.runs.map((run) => `${run.id}:${run.status}:${run.dispatch?.status}`).join("|"), () => {
   const active = props.runs.find((run) => run.id === activeRunId.value);
   if (active && !["pending", "running"].includes(active.status)) stopRefresh();
 });
@@ -207,7 +210,7 @@ onBeforeUnmount(stopRefresh);
             <section><h4>실행 단계</h4><ol class="steps scenario-steps"><li v-for="step in executionSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ step.description }}</span></li></ol></section>
             <section class="scenario-expectations"><h4>예상 결과</h4><ol class="steps scenario-steps"><li v-for="step in expectedSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ expectedLabel(step) }}</span></li></ol><p v-if="!expectedSteps(test).length" class="scenario-verification-warning">자동으로 판정할 예상 결과가 없어 실행 전 검토가 필요합니다.</p></section>
           </div>
-          <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${latestRun(test.id)!.status}`">{{ uiLabel(latestRun(test.id)!.status) }}</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
+          <div v-if="latestRun(test.id)" class="scenario-run"><span>최근 실행</span><span class="tag" :class="`tag--${testRunStatusTone(latestRun(test.id)!)}`">{{ testRunStatusLabel(latestRun(test.id)!) }}</span><span>시나리오 {{ latestRun(test.id)!.scenarioRevision || 1 }}판</span></div>
           <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">시나리오 수정</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button></div>
         </template>
         <form v-else class="scenario-editor" @submit.prevent="save(test.id)">

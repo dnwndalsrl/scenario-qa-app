@@ -45,6 +45,7 @@ export async function runSingleTest(analysisId: string, testId: string, testRunI
     const completed: AutomatedTestRun = {
       ...executed, id: queued.id, analysisId, trigger: queued.trigger || "manual_rerun",
       suiteId: queued.suiteId, suiteRunId: queued.suiteRunId, retryOfSuiteRunId: queued.retryOfSuiteRunId, queuedAt: queued.queuedAt,
+      dispatch: queued.dispatch,
       scenarioRevision: scenario.revision || 1, scenarioSnapshot: structuredClone(scenario)
     };
     await uploadArtifacts(client, analysis.user_id, analysisId, completed);
