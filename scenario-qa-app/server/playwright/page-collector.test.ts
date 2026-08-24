@@ -10,12 +10,14 @@ const fixtureUrl = "http://127.0.0.1:3011";
 const storageRoot = path.resolve(process.cwd(), "test/.tmp-analysis-storage");
 let fixture: ChildProcess;
 let snapshot: PageSnapshot;
+let stateSnapshot: PageSnapshot;
 
 beforeAll(async () => {
   process.env.ALLOW_LOCAL_TEST_TARGETS = "true"; process.env.ALLOWED_LOCAL_TEST_PORTS = "3011"; process.env.NUXT_STORAGE_ROOT = storageRoot; process.env.FIXTURE_PORT = "3011";
   fixture = spawn(process.execPath, ["test/fixtures/site/server.mjs"], { cwd: process.cwd(), env: process.env, stdio: "ignore", windowsHide: true });
   for (let count = 0; count < 40; count += 1) { if (await fetch(`${fixtureUrl}/health`).then((response) => response.ok).catch(() => false)) break; await new Promise((resolve) => setTimeout(resolve, 100)); }
   snapshot = await collectPage("analysis-fixture", fixtureUrl, { width: 1440, height: 900 }, 15000);
+  stateSnapshot = await collectPage("analysis-fixture", `${fixtureUrl}/state`, { width: 1440, height: 900 }, 15000);
 });
 afterAll(async () => { fixture?.kill(); await rm(storageRoot, { recursive: true, force: true }); });
 
@@ -28,6 +30,7 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(JSON.stringify(snapshot)).not.toContain("never-collect-this");
     const info = snapshot.elements.find((element) => element.testId === "info-button");
     expect(info?.locatorCandidates[0]).toMatchObject({ strategy: "test_id", value: "info-button", unique: true });
+    expect(stateSnapshot.elements.find((element) => element.testId === "accordion-button")?.stateAttributes).toMatchObject({ "aria-expanded": "false", "aria-controls": "accordion-panel" });
     const overlayLink = snapshot.elements.find((element) => element.href?.endsWith("/smartfarm/system/"));
     expect(overlayLink).toMatchObject({ type: "link", accessibleName: "Smart-Farm 시스템", actionable: true });
     expect(overlayLink?.locatorCandidates).toContainEqual(expect.objectContaining({ strategy: "css", value: 'a[href$="/smartfarm/system/"]' }));
@@ -320,6 +323,54 @@ describe("Playwright 페이지 수집과 실행", () => {
     const actual = await readStableActualValue(page, { strategy: "test_id", value: "removed-target", score: 100, unique: true });
 
     expect(actual).toBe("페이지 콘텐츠 안정화 확인");
+  });
+
+  it("verifies attribute, hidden, value, and count outcomes after safe UI interactions", async () => {
+    const accordion = stateSnapshot.elements.find((element) => element.testId === "accordion-button")!;
+    const close = stateSnapshot.elements.find((element) => element.testId === "notice-close")!;
+    const valueChange = stateSnapshot.elements.find((element) => element.testId === "value-change")!;
+    const value = stateSnapshot.elements.find((element) => element.testId === "status-value")!;
+    const add = stateSnapshot.elements.find((element) => element.testId === "item-add")!;
+    const locator = (element: typeof accordion) => element.locatorCandidates.find((item) => item.unique)!;
+    const scenarios = [
+      makeScenario("attribute-state", [
+        { action: "click", description: "상세 정보 열기", elementId: accordion.id, locator: locator(accordion) },
+        { action: "assert_attribute", description: "확장 상태 확인", elementId: accordion.id, locator: locator(accordion), value: "aria-expanded", expected: "true" }
+      ]),
+      makeScenario("hidden-state", [
+        { action: "click", description: "안내 닫기", elementId: close.id, locator: locator(close) },
+        { action: "assert_hidden", description: "안내 숨김 확인", locator: { strategy: "test_id", value: "state-notice", score: 100, unique: true } }
+      ]),
+      makeScenario("value-state", [
+        { action: "click", description: "값 변경", elementId: valueChange.id, locator: locator(valueChange) },
+        { action: "assert_value", description: "변경 값 확인", elementId: value.id, locator: locator(value), expected: "완료" }
+      ]),
+      makeScenario("count-state", [
+        { action: "click", description: "항목 추가", elementId: add.id, locator: locator(add) },
+        { action: "assert_count", description: "항목 개수 확인", locator: { strategy: "css", value: "#state-items li", score: 70, unique: false }, expected: "3" }
+      ]),
+      makeScenario("attribute-mismatch", [
+        { action: "click", description: "상세 정보 열기", elementId: accordion.id, locator: locator(accordion) },
+        { action: "assert_attribute", description: "잘못된 확장 상태 예상", elementId: accordion.id, locator: locator(accordion), value: "aria-expanded", expected: "false" }
+      ])
+    ];
+
+    const runs = await executeGeneratedTests(stateSnapshot, scenarios);
+
+    expect(runs.map((run) => run.status), JSON.stringify(runs)).toEqual(["success", "success", "success", "success", "failed"]);
+    expect(runs[0]?.stepResults[0]?.actual).toContain("aria-expanded=false → aria-expanded=true");
+    expect(runs[0]?.stepResults[1]).toMatchObject({ expected: "true", actual: "true" });
+    expect(runs[1]?.stepResults[1]).toMatchObject({ expected: "대상 요소가 숨겨짐", actual: "숨김 상태 확인" });
+    expect(runs[2]?.stepResults[1]).toMatchObject({ expected: "완료", actual: "완료" });
+    expect(runs[3]?.stepResults[1]).toMatchObject({ expected: "3", actual: "3" });
+    expect(runs[4]).toMatchObject({ failureKind: "product_defect", stepResults: [expect.any(Object), expect.objectContaining({ expected: "false", actual: "true", status: "failed" })] });
+  });
+
+  it("blocks reading a password value even when a scenario is marked safe", async () => {
+    const password = snapshot.elements.find((element) => element.inputType === "password")!;
+    const [run] = await executeGeneratedTests(snapshot, [makeScenario("password-value", [{ action: "assert_value", description: "비밀번호 값 확인", elementId: password.id, locator: password.locatorCandidates.find((item) => item.unique)!, expected: "secret" }])]);
+
+    expect(run).toMatchObject({ status: "blocked", failureKind: "safety_blocked" });
   });
 });
 

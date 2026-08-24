@@ -9,7 +9,7 @@ export type PageType = "landing" | "login" | "signup" | "search" | "list" | "det
 export type TestSafetyLevel = "safe" | "review_required" | "blocked";
 export type TestRunStatus = "pending" | "running" | "success" | "failed" | "blocked" | "error";
 export type TestFailureKind = "product_defect" | "automation_limit" | "environment_error" | "inconclusive" | "safety_blocked";
-export type GeneratedTestAction = "goto" | "scroll_to_ratio" | "scroll_by" | "scroll_into_view" | "wait_for_stable" | "assert_url" | "assert_title" | "assert_visible" | "assert_in_viewport" | "assert_scroll" | "assert_enabled" | "assert_text" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
+export type GeneratedTestAction = "goto" | "scroll_to_ratio" | "scroll_by" | "scroll_into_view" | "wait_for_stable" | "assert_url" | "assert_title" | "assert_visible" | "assert_hidden" | "assert_in_viewport" | "assert_scroll" | "assert_enabled" | "assert_text" | "assert_attribute" | "assert_value" | "assert_count" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
 export type LocatorStrategy = "test_id" | "role" | "label" | "placeholder" | "text" | "css";
 export type PageObservationState = "initial" | "scroll_25" | "scroll_50" | "scroll_75" | "scroll_100" | "scroll_up" | "restored_top";
 export type DiscoveredElementType = "link" | "button" | "input" | "textarea" | "select" | "checkbox" | "radio" | "form" | "heading" | "navigation" | "table" | "dialog" | "tab" | "alert" | "image" | "other";
@@ -79,6 +79,7 @@ export interface DiscoveredElement {
   id: string; type: DiscoveredElementType; tagName: string; role?: string; accessibleName?: string; label?: string; text?: string;
   placeholder?: string; testId?: string; href?: string; inputType?: string; visible: boolean; enabled?: boolean; required?: boolean;
   readonly?: boolean; actionable?: boolean; locatorCandidates: LocatorCandidate[]; safetyHints: string[];
+  stateAttributes?: Record<string, string>;
   observedStates?: PageObservationState[]; inViewportStates?: PageObservationState[];
 }
 export interface PageStateObservation { state: PageObservationState; scrollY: number; documentHeight: number; inViewportElementCount: number; }
@@ -121,7 +122,11 @@ export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
-  trigger?: "initial" | "manual_rerun" | "approved_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
+  trigger?: "initial" | "manual_rerun" | "approved_run" | "suite_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
+  suiteId?: string; suiteRunId?: string; queuedAt?: string;
+}
+export interface TestSuite {
+  id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {

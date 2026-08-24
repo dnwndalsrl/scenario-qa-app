@@ -217,7 +217,7 @@ async function continueWithoutDocument() {
     <template v-else-if="data.snapshot && data.pageAnalysis">
       <PageOverview :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
       <DiscoveredFunctions :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
-      <GeneratedTestList :analysis-id="data.analysis.id" :tests="data.generatedTests" :snapshot="data.snapshot" :runs="data.testRuns" :review-mode="data.analysis.processStage === 'scenario_review'" @changed="refreshDetail" />
+      <GeneratedTestList :analysis-id="data.analysis.id" :tests="data.generatedTests" :snapshot="data.snapshot" :runs="data.testRuns" :review-mode="data.analysis.processStage === 'scenario_review'" :can-run-suites="data.analysis.processStage === 'report_complete'" @changed="refreshDetail" />
       <TestRunResult v-if="data.analysis.processStage === 'report_complete'" :runs="data.testRuns" :tests="data.generatedTests" />
       <IssueList :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
     </template>

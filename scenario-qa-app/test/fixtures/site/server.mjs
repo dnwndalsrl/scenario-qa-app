@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const root = path.dirname(fileURLToPath(import.meta.url)); const port = Number(process.env.FIXTURE_PORT || 3000); const requests = [];
-const routes = { "/": "index.html", "/products": "products.html", "/products/1": "product-detail-1.html", "/products/2": "product-detail-2.html", "/products/3": "product-detail-2.html", "/search": "search.html", "/about": "about.html", "/articles/qa-guide": "article.html", "/guide": "article.html" };
+const routes = { "/": "index.html", "/state": "state.html", "/products": "products.html", "/products/1": "product-detail-1.html", "/products/2": "product-detail-2.html", "/products/3": "product-detail-2.html", "/search": "search.html", "/about": "about.html", "/articles/qa-guide": "article.html", "/guide": "article.html" };
 createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://127.0.0.1:${port}`); requests.push(`${request.method} ${url.pathname}${url.search}`);
   if (url.pathname === "/health") return json(response, 200, { status: "ok" });

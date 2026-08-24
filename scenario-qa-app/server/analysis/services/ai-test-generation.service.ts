@@ -16,7 +16,7 @@ export async function generateTestsWithAi(snapshot: PageSnapshot, analysis: AiPa
   const input = {
     page: { url: snapshot.finalUrl, title: snapshot.title, headings: snapshot.headings, pageType: analysis.pageType, purpose: analysis.pagePurpose },
     functions: analysis.primaryFunctions, opportunities: analysis.testOpportunities,
-    elements: snapshot.elements.map(({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, actionable, locatorCandidates, safetyHints, observedStates, inViewportStates }) => ({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, actionable, locatorCandidates: locatorCandidates.slice(0, 3), safetyHints, observedStates, inViewportStates })),
+    elements: snapshot.elements.map(({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, actionable, locatorCandidates, safetyHints, stateAttributes, observedStates, inViewportStates }) => ({ id, type, tagName, role, accessibleName, label, text, href, inputType, enabled, required, actionable, locatorCandidates: locatorCandidates.slice(0, 3), safetyHints, stateAttributes, observedStates, inViewportStates })),
     stateObservations: snapshot.stateObservations,
     requirements: document?.requirements || [],
     limits: { maxScenarios: config.maxGeneratedScenarios, maxStepsPerScenario: config.maxStepsPerScenario }, testMode: "read_only"
@@ -40,19 +40,27 @@ export function validateGeneratedTestPayload(raw: GeneratedPayload, snapshot: Pa
       const element = repairedStep.elementId ? elements.get(repairedStep.elementId) : undefined;
       if (step.elementId && !element) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Unknown step element id");
       const discoveredLocator = repairedStep.locator && element?.locatorCandidates.find((candidate) => candidate.strategy === repairedStep.locator!.strategy && candidate.value === repairedStep.locator!.value);
-      const equivalentHrefClick = repairedStep.action === "click" && discoveredLocator?.strategy === "css" && discoveredLocator.value.includes("[href");
-      if (repairedStep.locator && (!discoveredLocator || !discoveredLocator.unique && !equivalentHrefClick)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not executable");
+      const nonUniqueLocatorAllowed = repairedStep.action === "assert_count" || repairedStep.action === "click" && discoveredLocator?.strategy === "css" && discoveredLocator.value.includes("[href");
+      if (repairedStep.locator && (!discoveredLocator || !discoveredLocator.unique && !nonUniqueLocatorAllowed)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Locator was not discovered or is not executable");
       if (repairedStep.action === "click" && element && !isInteractive(element)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Click target is not interactive");
       if (repairedStep.action === "click" && element?.actionable === false) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Click target did not pass actionability preflight");
+      if (repairedStep.action === "assert_value" && element?.inputType === "password") throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Sensitive input values cannot be asserted");
       const numericValue = Number(repairedStep.value);
       if (repairedStep.action === "scroll_to_ratio" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 100)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll ratio");
       if (repairedStep.action === "scroll_by" && (!repairedStep.value?.trim() || !Number.isFinite(numericValue) || numericValue < -10000 || numericValue > 10000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid scroll distance");
       if (repairedStep.action === "wait_for_stable" && repairedStep.value?.trim() && (!Number.isFinite(numericValue) || numericValue < 100 || numericValue > 5000)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid stability wait");
+      validateStateAssertion(repairedStep.action, repairedStep.value, repairedStep.expected);
       return { ...repairedStep, elementId: repairedStep.elementId ?? undefined, locator: repairedStep.locator ?? undefined, value: repairedStep.value ?? undefined, expected: inferredClickExpected(repairedStep.action, repairedStep.expected, element?.href, snapshot.finalUrl), timeoutMs: repairedStep.timeoutMs ?? undefined, id: createId("step"), order: index + 1, evidence: [...new Set([...(repairedStep.evidence || []), ...(repairedStep.elementId ? [`근거 요소: ${repairedStep.elementId}`] : [])])] };
     });
     const sourceElementIds = [...new Set([...scenario.sourceElementIds, ...steps.map((step) => step.elementId).filter((id): id is string => Boolean(id))])];
     return ensureScenarioAssertions(enforceSafety({ ...scenario, sourceElementIds, requirementIds: document ? scenario.requirementIds.filter((id) => requirementIds.has(id)) : [], id: createId("test"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, steps, safetyReasons: [], generatedAt: new Date().toISOString() }), snapshot);
   });
+}
+
+function validateStateAssertion(action: string, value: string | null, expected: string | null): void {
+  if (action === "assert_attribute" && (!value?.trim() || !/^[a-zA-Z_:][a-zA-Z0-9:._-]*$/.test(value.trim()) || !expected?.trim())) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid attribute assertion");
+  if (action === "assert_value" && !expected?.trim()) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Missing expected value");
+  if (action === "assert_count" && (!expected?.trim() || !Number.isInteger(Number(expected)) || Number(expected) < 0)) throw new AppError("AI_TEST_GENERATION_INVALID_RESPONSE", undefined, 502, "Invalid expected count");
 }
 
 function repairClickTarget<T extends GeneratedPayload["scenarios"][number]["steps"][number]>(step: T, snapshot: PageSnapshot): T {

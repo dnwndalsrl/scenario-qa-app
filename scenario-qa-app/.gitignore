@@ -19,3 +19,5 @@ test-results/
 *.pem
 *.key
 .supabase/
+.vercel/
+.env.local

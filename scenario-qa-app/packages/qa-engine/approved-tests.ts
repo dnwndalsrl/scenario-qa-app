@@ -6,15 +6,21 @@ import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../.
 function env(name: string) { const value = process.env[name]; if (!value) throw new Error(`${name} is required`); return value; }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
 
-export async function runApprovedTests(analysisId: string): Promise<void> {
+export async function runApprovedTests(analysisId: string, options: { preserveAnalysisState?: boolean } = {}): Promise<void> {
   const client = adminClient();
   const { data: analysis, error } = await client.from("analyses").select("*").eq("id", analysisId).single();
   if (error || !analysis) throw new Error("Analysis job not found");
-  if (!["dispatching", "dispatched"].includes(analysis.status) || analysis.process_stage !== "test_execution") throw new Error("Analysis is not ready for approved tests");
+  if (options.preserveAnalysisState) {
+    if (analysis.status !== "completed" || analysis.process_stage !== "report_complete") throw new Error("Analysis is not ready for suite tests");
+  } else if (!["dispatching", "dispatched"].includes(analysis.status) || analysis.process_stage !== "test_execution") {
+    throw new Error("Analysis is not ready for approved tests");
+  }
   const workRoot = path.resolve(process.cwd(), ".qa-runs", analysisId, "approved");
   await mkdir(workRoot, { recursive: true });
   process.env.NUXT_STORAGE_ROOT = workRoot;
-  await client.from("analyses").update({ status: "running", progress: 90, current_message: "3단계 확정 시나리오를 실행하고 있습니다.", started_at: new Date().toISOString() }).eq("id", analysisId);
+  if (!options.preserveAnalysisState) {
+    await client.from("analyses").update({ status: "running", progress: 90, current_message: "3단계 확정 시나리오를 실행하고 있습니다.", started_at: new Date().toISOString() }).eq("id", analysisId);
+  }
   const [{ data: testRows }, { data: runRows }] = await Promise.all([
     client.from("generated_tests").select("*").eq("analysis_id", analysisId),
     client.from("test_runs").select("*").eq("analysis_id", analysisId).eq("status", "pending")
@@ -38,7 +44,7 @@ export async function runApprovedTests(analysisId: string): Promise<void> {
         const runRow = runRows.find((run) => run.test_id === testRow.id)!;
         const queued = runRow.payload as AutomatedTestRun;
         const completed: AutomatedTestRun = {
-          ...result, id: queued.id, analysisId, trigger: "approved_run",
+          ...result, id: queued.id, analysisId, trigger: options.preserveAnalysisState ? "suite_run" : "approved_run",
           scenarioRevision: queued.scenarioRevision, scenarioSnapshot: queued.scenarioSnapshot
         };
         await uploadArtifacts(client, analysis.user_id, analysisId, completed);
@@ -57,11 +63,19 @@ export async function runApprovedTests(analysisId: string): Promise<void> {
     const blockedCount = runs.filter((run) => run.status === "blocked").length;
     const errorCount = runs.filter((run) => run.status === "error").length;
     const summary = { ...(analysis.summary || {}), executedTestCount: runs.length, successCount, failedCount, blockedCount, errorCount, overallStatus: failedCount + errorCount ? "failed" : "passed" };
-    await client.from("analyses").update({ status: "completed", process_stage: "report_complete", progress: 100, current_message: "3단계 테스트가 완료되어 최종 보고서를 생성했습니다.", summary, completed_at: new Date().toISOString(), error: null }).eq("id", analysisId);
+    if (!options.preserveAnalysisState) {
+      await client.from("analyses").update({ status: "completed", process_stage: "report_complete", progress: 100, current_message: "3단계 테스트가 완료되어 최종 보고서를 생성했습니다.", summary, completed_at: new Date().toISOString(), error: null }).eq("id", analysisId);
+    }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    await client.from("test_runs").update({ status: "error" }).eq("analysis_id", analysisId).in("status", ["pending", "running"]);
-    await client.from("analyses").update({ status: "failed", process_stage: "failed", progress: 100, current_message: "3단계 테스트 실행에 실패했습니다.", error: { code: "APPROVED_TESTS_FAILED", message }, completed_at: new Date().toISOString() }).eq("id", analysisId);
+    const { data: unfinishedRows } = await client.from("test_runs").select("id,payload").eq("analysis_id", analysisId).in("status", ["pending", "running"]);
+    for (const row of unfinishedRows || []) {
+      const payload = { ...(row.payload as AutomatedTestRun), status: "error" as const, completedAt: new Date().toISOString(), error: { code: "APPROVED_TESTS_FAILED", message } };
+      await client.from("test_runs").update({ status: "error", payload }).eq("id", row.id);
+    }
+    if (!options.preserveAnalysisState) {
+      await client.from("analyses").update({ status: "failed", process_stage: "failed", progress: 100, current_message: "3단계 테스트 실행에 실패했습니다.", error: { code: "APPROVED_TESTS_FAILED", message }, completed_at: new Date().toISOString() }).eq("id", analysisId);
+    }
     throw cause;
   }
 }

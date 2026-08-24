@@ -9,6 +9,9 @@ import { createId } from "../utils/id";
 import { inferClickOutcome, urlMatchesExpected, verifyClickOutcome } from "./click-outcome";
 import { resolveLocator } from "./locator-resolver";
 
+interface StepExecution { locatorUsed?: LocatorCandidate; actual?: string; }
+interface InteractionState { visible: boolean; text?: string; value?: string; checked?: boolean; attributes: Record<string, string>; }
+
 export async function executeGeneratedTests(snapshot: PageSnapshot, scenarios: GeneratedTestScenario[]): Promise<AutomatedTestRun[]> {
   const results: AutomatedTestRun[] = [];
   let browser: Browser | undefined;
@@ -30,8 +33,10 @@ function isExecutable(scenario: GeneratedTestScenario, snapshot: PageSnapshot): 
   if (scenario.safetyLevel !== "safe" || !scenario.autoExecutable) return false;
   const origin = new URL(snapshot.finalUrl).origin;
   return !scenario.steps.some((step) => {
-    if (step.action !== "click" || !step.elementId) return false;
+    if (!step.elementId) return false;
     const element = snapshot.elements.find((item) => item.id === step.elementId);
+    if (step.action === "assert_value" && element?.inputType === "password") return true;
+    if (step.action !== "click") return false;
     return Boolean(element?.safetyHints.length || element?.href && new URL(element.href, snapshot.finalUrl).origin !== origin);
   });
 }
@@ -61,15 +66,15 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
       if (previousFailed) { run.stepResults.push(baseStep(step, "blocked", "선행 단계 실패로 실행하지 않음")); continue; }
       const stepStarted = Date.now();
       try {
-        const locatorUsed = await executeStep(page, snapshot, step, config.testStepTimeoutMs);
-        run.stepResults.push({ ...baseStep(step, "success"), expected: expectedValue(step), actual: await actualValue(page, snapshot, step, locatorUsed), locatorUsed, currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        const execution = await executeStep(page, snapshot, step, config.testStepTimeoutMs);
+        run.stepResults.push({ ...baseStep(step, "success"), expected: expectedValue(step), actual: execution.actual ?? await actualValue(page, snapshot, step, execution.locatorUsed), locatorUsed: execution.locatorUsed, currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
       } catch (error) {
         previousFailed = true;
         const failureKind = classifyFailure(step, error);
         const screenshot = await page.screenshot({ type: "png", fullPage: false }).then((bytes) => savePngArtifact(snapshot.analysisId, bytes)).catch(() => undefined);
         if (screenshot) screenshotArtifactIds.push(screenshot.id);
         const status = failureKind === "product_defect" ? "failed" : "error";
-        run.stepResults.push({ ...baseStep(step, status, error instanceof Error ? error.message : String(error)), expected: expectedValue(step), failureKind, currentUrl: sanitizeUrl(page.url()), screenshotArtifactId: screenshot?.id, startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        run.stepResults.push({ ...baseStep(step, status, error instanceof Error ? error.message : String(error)), expected: expectedValue(step), actual: await actualValue(page, snapshot, step).catch(() => undefined), failureKind, currentUrl: sanitizeUrl(page.url()), screenshotArtifactId: screenshot?.id, startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
       }
     }
     run.status = run.stepResults.some((step) => step.status === "error") ? "error" : run.stepResults.some((step) => step.status === "failed") ? "failed" : "success";
@@ -81,26 +86,31 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
   }
 }
 
-async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, defaultTimeout: number): Promise<LocatorCandidate | undefined> {
+async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, defaultTimeout: number): Promise<StepExecution> {
   const timeout = step.timeoutMs ?? defaultTimeout;
-  if (step.action === "goto") { await page.goto(snapshot.finalUrl, { waitUntil: "domcontentloaded", timeout }); return undefined; }
+  if (step.action === "goto") { await page.goto(snapshot.finalUrl, { waitUntil: "domcontentloaded", timeout }); return {}; }
   if (step.action === "scroll_to_ratio") {
     const ratio = stepNumber(step, "스크롤 비율", 0, 100);
     await resetScrollTracking(page);
     await page.evaluate((value) => window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - window.innerHeight) * value / 100), ratio);
     await waitForPageScrollStable(page, timeout);
-    return undefined;
+    return {};
   }
   if (step.action === "scroll_by") {
     const pixels = stepNumber(step, "스크롤 이동 픽셀", -10000, 10000);
     await resetScrollTracking(page);
     await page.evaluate((value) => window.scrollBy(0, value), pixels);
     await waitForPageScrollStable(page, timeout);
-    return undefined;
+    return {};
   }
-  if (step.action === "assert_url") { assertExpectedUrl(page.url(), step.expected || snapshot.finalUrl); return undefined; }
-  if (step.action === "assert_title") { const title = await page.title(); if (step.expected ? !title.includes(step.expected) : !title.trim()) throw new Error(`페이지 제목이 예상과 다릅니다: ${title}`); return undefined; }
-  if (step.action === "assert_scroll") { await assertScrollOutcome(page, step.expected, timeout); return undefined; }
+  if (step.action === "assert_url") { assertExpectedUrl(page.url(), step.expected || snapshot.finalUrl); return {}; }
+  if (step.action === "assert_title") { const title = await page.title(); if (step.expected ? !title.includes(step.expected) : !title.trim()) throw new Error(`페이지 제목이 예상과 다릅니다: ${title}`); return {}; }
+  if (step.action === "assert_scroll") { await assertScrollOutcome(page, step.expected, timeout); return {}; }
+  if (step.action === "assert_count") {
+    const { locator, candidate } = await resolveCountStepLocator(page, snapshot, step);
+    await waitForExpectedCount(locator, expectedCount(step), timeout);
+    return { locatorUsed: candidate };
+  }
   if (step.action === "wait_for_stable") {
     const resolved = step.elementId || step.locator
       ? await resolveStepLocator(page, snapshot, step, Math.min(timeout, 1500)).catch((error) => {
@@ -110,23 +120,30 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
       : undefined;
     if (resolved) await waitForElementStable(page, resolved.locator, step.value, timeout);
     else await waitForPageContentStable(page, step.value, timeout);
-    return resolved?.candidate;
+    return { locatorUsed: resolved?.candidate };
   }
   const { locator, candidate } = await resolveStepLocator(page, snapshot, step, timeout);
   switch (step.action) {
     case "scroll_into_view": await scrollLocatorIntoView(page, locator, timeout); break;
     case "assert_visible": await locator.waitFor({ state: "visible", timeout }); break;
+    case "assert_hidden": await locator.waitFor({ state: "hidden", timeout }); break;
     case "assert_in_viewport": await locator.waitFor({ state: "visible", timeout }); await waitForInViewport(page, locator, timeout); break;
     case "assert_enabled": if (!await locator.isEnabled({ timeout })) throw new Error("요소가 비활성 상태입니다."); break;
     case "assert_text": { const text = await locator.innerText({ timeout }); if (!text.includes(step.expected || "")) throw new Error(`예상 텍스트를 찾지 못했습니다: ${text}`); break; }
+    case "assert_attribute": { const actual = await locator.getAttribute(requiredAttribute(step)); if (actual !== step.expected) throw new Error(`속성값이 예상과 다릅니다. 예상: ${step.expected}, 실제: ${actual ?? "없음"}`); break; }
+    case "assert_value": { const actual = await locator.inputValue({ timeout }); if (actual !== step.expected) throw new Error(`입력값이 예상과 다릅니다. 예상: ${step.expected}, 실제: ${actual}`); break; }
     case "click": {
       await resetScrollTracking(page);
+      const startedUrl = page.url();
       const startedScrollY = await page.evaluate(() => window.scrollY);
       const expectation = inferClickOutcome(step, step.elementId ? snapshot.elements.find((element) => element.id === step.elementId) : undefined, page.url());
       const actionable = await resolveActionableLocator(locator);
+      const before = await readInteractionState(actionable);
       await clickWhenActionable(page, actionable, timeout);
       await verifyClickOutcome(page, expectation, startedScrollY, timeout);
-      break;
+      if (expectation.kind === "url" || expectation.kind === "none" && page.url() !== startedUrl) return { locatorUsed: candidate, actual: `클릭 완료 · 페이지 이동: ${sanitizeUrl(page.url())}` };
+      const after = await readInteractionState(actionable).catch(() => undefined);
+      return { locatorUsed: candidate, actual: after ? describeStateTransition(before, after) : "클릭 완료 · 클릭 후 대상 제거 또는 페이지 이동" };
     }
     case "fill": await locator.fill(step.value || "qa-read-only-check", { timeout }); break;
     case "select": await locator.selectOption(step.value || { index: 0 }, { timeout }); break;
@@ -135,7 +152,7 @@ async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     case "uncheck": await locator.uncheck({ timeout }); break;
     default: throw new AppError("TEST_EXECUTION_FAILED", `지원하지 않는 동작입니다: ${step.action}`);
   }
-  return candidate;
+  return { locatorUsed: candidate };
 }
 
 async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, locatorUsed?: LocatorCandidate): Promise<string | undefined> {
@@ -166,9 +183,12 @@ async function actualValue(page: Page, snapshot: PageSnapshot, step: GeneratedTe
     const prefix = step.action === "scroll_into_view" ? "대상으로 스크롤" : "화면 내 도달";
     return `${prefix}(top ${rect.top}px / ${rect.viewportHeight}px) · 스크롤 이벤트 ${scroll.eventCount}회 · 이동 ${Math.round(scroll.lastY - scroll.startedY)}px`;
   }
-  if (["assert_visible", "assert_enabled"].includes(step.action)) return step.action === "assert_enabled" ? "활성 상태 확인" : "표시 상태 확인";
+  if (["assert_visible", "assert_hidden", "assert_enabled"].includes(step.action)) return step.action === "assert_enabled" ? "활성 상태 확인" : step.action === "assert_hidden" ? "숨김 상태 확인" : "표시 상태 확인";
   if (step.action === "assert_text" && locatorUsed) return sanitizeText(await resolveLocator(page, locatorUsed).innerText().catch(() => ""), 500);
-  if (step.action === "click") return "클릭 동작 완료";
+  if (step.action === "assert_attribute") return (await stateLocator(page, snapshot, step, locatorUsed).getAttribute(requiredAttribute(step))) ?? "없음";
+  if (step.action === "assert_value") return sanitizeText(await stateLocator(page, snapshot, step, locatorUsed).inputValue(), 500);
+  if (step.action === "assert_count") return String(await stateLocator(page, snapshot, step, locatorUsed).count());
+  if (step.action === "click") return "클릭 완료 · 상태 변화 미감지";
   return undefined;
 }
 
@@ -214,16 +234,88 @@ function isAssertion(step: GeneratedTestStep) { return step.action.startsWith("a
 function expectedValue(step: GeneratedTestStep): string | undefined {
   if (step.expected) return step.expected;
   if (step.action === "assert_visible") return "대상 요소가 표시됨";
+  if (step.action === "assert_hidden") return "대상 요소가 숨겨짐";
   if (step.action === "assert_in_viewport") return "대상 요소가 화면 영역 안에 표시됨";
   if (step.action === "assert_enabled") return "대상 요소가 활성 상태임";
   if (step.action === "assert_title") return "페이지 제목이 존재함";
   return undefined;
 }
 
+function requiredAttribute(step: GeneratedTestStep): string {
+  const name = step.value?.trim();
+  if (!name || !/^[a-zA-Z_:][a-zA-Z0-9:._-]*$/.test(name)) throw new AppError("TEST_EXECUTION_FAILED", "검증할 속성명이 올바르지 않습니다.");
+  if (step.expected === undefined) throw new AppError("TEST_EXECUTION_FAILED", "속성 예상값이 없습니다.");
+  return name;
+}
+
+function expectedCount(step: GeneratedTestStep): number {
+  const count = Number(step.expected);
+  if (!step.expected?.trim() || !Number.isInteger(count) || count < 0) throw new AppError("TEST_EXECUTION_FAILED", "예상 개수는 0 이상의 정수여야 합니다.");
+  return count;
+}
+
+function stateLocator(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, locatorUsed?: LocatorCandidate) {
+  const candidate = locatorUsed ?? step.locator ?? (step.elementId ? snapshot.elements.find((element) => element.id === step.elementId)?.locatorCandidates[0] : undefined);
+  if (!candidate) throw new AppError("TEST_LOCATOR_NOT_FOUND");
+  return resolveLocator(page, candidate);
+}
+
 function stepNumber(step: GeneratedTestStep, label: string, min: number, max: number): number {
   const value = Number(step.value);
   if (!step.value?.trim() || !Number.isFinite(value) || value < min || value > max) throw new AppError("TEST_EXECUTION_FAILED", `${label}은(는) ${min}~${max} 사이 숫자여야 합니다.`);
   return value;
+}
+
+async function resolveCountStepLocator(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep) {
+  const element = step.elementId ? snapshot.elements.find((item) => item.id === step.elementId) : undefined;
+  const candidates = [step.locator, ...(element?.locatorCandidates || [])]
+    .filter((item): item is LocatorCandidate => Boolean(item))
+    .filter((item, index, values) => values.findIndex((value) => value.strategy === item.strategy && value.value === item.value) === index);
+  if (!candidates.length) throw new AppError("TEST_LOCATOR_NOT_FOUND");
+  for (const candidate of candidates) {
+    const locator = resolveLocator(page, candidate);
+    if (await locator.count().catch(() => 0)) return { locator, candidate };
+  }
+  return { locator: resolveLocator(page, candidates[0]!), candidate: candidates[0]! };
+}
+
+async function waitForExpectedCount(locator: import("playwright").Locator, expected: number, timeout: number): Promise<void> {
+  const started = Date.now();
+  let actual = await locator.count();
+  while (actual !== expected && Date.now() - started < timeout) {
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    actual = await locator.count();
+  }
+  if (actual !== expected) throw new Error(`요소 개수가 예상과 다릅니다. 예상: ${expected}, 실제: ${actual}`);
+}
+
+async function readInteractionState(locator: import("playwright").Locator): Promise<InteractionState> {
+  return locator.evaluate((element) => {
+    const node = element as HTMLElement;
+    const input = element as HTMLInputElement;
+    const rect = node.getBoundingClientRect();
+    const style = getComputedStyle(node);
+    const attributes = Object.fromEntries(["aria-expanded", "aria-selected", "aria-pressed", "aria-checked", "data-state"]
+      .map((name) => [name, node.getAttribute(name)] as const).filter((entry): entry is readonly [string, string] => entry[1] !== null));
+    return {
+      visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0,
+      text: (node.innerText || "").replace(/\s+/g, " ").trim().slice(0, 200) || undefined,
+      value: "value" in input && input.type !== "password" ? String(input.value).slice(0, 200) : undefined,
+      checked: "checked" in input ? Boolean(input.checked) : undefined,
+      attributes
+    };
+  });
+}
+
+function describeStateTransition(before: InteractionState, after: InteractionState): string {
+  const changes: string[] = [];
+  const names = new Set([...Object.keys(before.attributes), ...Object.keys(after.attributes)]);
+  for (const name of names) if (before.attributes[name] !== after.attributes[name]) changes.push(`${name}=${before.attributes[name] ?? "없음"} → ${name}=${after.attributes[name] ?? "없음"}`);
+  if (before.visible !== after.visible) changes.push(`표시=${before.visible} → 표시=${after.visible}`);
+  if (before.value !== after.value) changes.push(`값=${before.value ?? "없음"} → 값=${after.value ?? "없음"}`);
+  if (before.checked !== after.checked) changes.push(`체크=${before.checked ?? "없음"} → 체크=${after.checked ?? "없음"}`);
+  if (before.text !== after.text) changes.push(`텍스트=${before.text ?? "없음"} → 텍스트=${after.text ?? "없음"}`);
+  return changes.length ? `클릭 전후 상태: ${changes.join(" · ")}` : "클릭 완료 · 상태 변화 미감지";
 }
 
 async function resolveStepLocator(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, timeout: number) {
