@@ -28,7 +28,7 @@ jobs:
 
       - name: Restore service role key
         run: |
-          vercel env rm SUPABASE_SERVICE_ROLE_KEY production --yes --token "$VERCEL_TOKEN"
+          vercel env rm SUPABASE_SERVICE_ROLE_KEY production --yes --token "$VERCEL_TOKEN" || true
           printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | vercel env add SUPABASE_SERVICE_ROLE_KEY production --sensitive --token "$VERCEL_TOKEN"
-          vercel env rm SUPABASE_SERVICE_ROLE_KEY preview --yes --token "$VERCEL_TOKEN"
+          vercel env rm SUPABASE_SERVICE_ROLE_KEY preview --yes --token "$VERCEL_TOKEN" || true
           printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | vercel env add SUPABASE_SERVICE_ROLE_KEY preview --sensitive --token "$VERCEL_TOKEN"
