@@ -1,0 +1,34 @@
+name: Sync Vercel service key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Validate required secrets
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+
+      - name: Link production project
+        run: |
+          mkdir -p .vercel
+          printf '%s' '{"projectId":"prj_a3HhzE07h1iMdYwzYSrySLJOfchK","orgId":"team_jb8vgYSRiruX7WSJHtFgQIAG"}' > .vercel/project.json
+
+      - name: Restore service role key
+        run: |
+          vercel env rm SUPABASE_SERVICE_ROLE_KEY production --yes --token "$VERCEL_TOKEN"
+          printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | vercel env add SUPABASE_SERVICE_ROLE_KEY production --sensitive --token "$VERCEL_TOKEN"
+          vercel env rm SUPABASE_SERVICE_ROLE_KEY preview --yes --token "$VERCEL_TOKEN"
+          printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | vercel env add SUPABASE_SERVICE_ROLE_KEY preview --sensitive --token "$VERCEL_TOKEN"
