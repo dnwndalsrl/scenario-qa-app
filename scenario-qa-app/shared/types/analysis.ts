@@ -137,6 +137,17 @@ export interface AutomatedTestRun {
 export interface TestSuite {
   id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;
 }
+export type QaDefectStatus = "new" | "investigating" | "in_progress" | "revalidation_requested" | "resolved" | "deferred";
+export type QaDefectSeverity = "low" | "medium" | "high" | "critical";
+export type QaDefectPriority = "P1" | "P2" | "P3" | "P4";
+export interface QaDefectNote { id: string; text: string; author: string; createdAt: string; }
+export interface QaDefectHistoryEntry { id: string; status: QaDefectStatus; description: string; author: string; createdAt: string; }
+export interface QaDefect {
+  id: string; analysisId: string; sourceRunId: string; scenarioId: string; scenarioTitle: string; targetUrl: string;
+  title: string; description: string; status: QaDefectStatus; severity: QaDefectSeverity; priority: QaDefectPriority; assignee: string;
+  failureSummary: string; failedStepOrders: number[]; screenshotArtifactIds: string[]; notes: QaDefectNote[]; history: QaDefectHistoryEntry[];
+  createdAt: string; updatedAt: string;
+}
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {
   analysis: SiteAnalysis; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[];

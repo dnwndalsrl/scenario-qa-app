@@ -214,11 +214,13 @@ async function continueWithoutDocument() {
     <RequirementDocumentPanel :document="data.documentAnalysis" />
     <SiteAnalysisReport v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" @changed="refreshDetail" />
     <TestRunResult v-if="data.analysis.options.mode === 'site_crawl' && data.analysis.processStage === 'report_complete'" :runs="data.testRuns" :tests="data.generatedTests" />
+    <DefectManager v-if="data.analysis.options.mode === 'site_crawl' && data.analysis.processStage === 'report_complete'" :analysis-id="data.analysis.id" :runs="data.testRuns" :tests="data.generatedTests" @changed="refreshDetail" />
     <template v-else-if="data.snapshot && data.pageAnalysis">
       <PageOverview :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
       <DiscoveredFunctions :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
       <GeneratedTestList :analysis-id="data.analysis.id" :tests="data.generatedTests" :snapshot="data.snapshot" :runs="data.testRuns" :review-mode="data.analysis.processStage === 'scenario_review'" :can-run-suites="data.analysis.processStage === 'report_complete'" @changed="refreshDetail" />
       <TestRunResult v-if="data.analysis.processStage === 'report_complete'" :runs="data.testRuns" :tests="data.generatedTests" />
+      <DefectManager v-if="data.analysis.processStage === 'report_complete'" :analysis-id="data.analysis.id" :runs="data.testRuns" :tests="data.generatedTests" @changed="refreshDetail" />
       <IssueList :snapshot="data.snapshot" :page-analysis="data.pageAnalysis" />
     </template>
     <div v-else-if="terminal.includes(data.analysis.status) && data.analysis.error" class="error-box">{{ data.analysis.error.message }}</div>
