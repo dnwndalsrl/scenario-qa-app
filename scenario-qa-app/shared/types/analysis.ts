@@ -9,6 +9,7 @@ export type PageType = "landing" | "login" | "signup" | "search" | "list" | "det
 export type TestSafetyLevel = "safe" | "review_required" | "blocked";
 export type TestRunStatus = "pending" | "running" | "success" | "failed" | "blocked" | "error";
 export type TestFailureKind = "product_defect" | "automation_limit" | "environment_error" | "inconclusive" | "safety_blocked";
+export type TestRunReviewClassification = "actual_defect" | "scenario_error" | "element_recognition_error" | "environment_issue" | "requirement_change" | "pending_review";
 export type GeneratedTestAction = "goto" | "scroll_to_ratio" | "scroll_by" | "scroll_into_view" | "wait_for_stable" | "assert_url" | "assert_title" | "assert_visible" | "assert_hidden" | "assert_in_viewport" | "assert_scroll" | "assert_enabled" | "assert_text" | "assert_attribute" | "assert_value" | "assert_count" | "click" | "fill" | "select" | "press" | "check" | "uncheck";
 export type LocatorStrategy = "test_id" | "role" | "label" | "placeholder" | "text" | "css";
 export type PageObservationState = "initial" | "scroll_25" | "scroll_50" | "scroll_75" | "scroll_100" | "scroll_up" | "restored_top";
@@ -42,6 +43,7 @@ export interface CrawlState {
 }
 export interface SiteAnalysis {
   id: string; targetUrl: string; normalizedUrl: string; status: SiteAnalysisStatus; progress: number; currentMessage?: string;
+  authenticationEnabled?: boolean;
   options: SiteAnalysisOptions; pageSnapshotId?: string; pageAnalysisId?: string; pageIds: string[]; pageAnalysisIds: string[];
   siteMapId?: string; siteAnalysisId?: string; generatedTestIds: string[]; testRunIds: string[]; crawlState?: CrawlState;
   summary?: AnalysisSummary | SiteAnalysisSummary; error?: AnalysisError; processStage?: AnalysisProcessStage; scenariosApprovedAt?: string; createdAt: string; startedAt?: string; completedAt?: string; updatedAt: string;
@@ -115,18 +117,53 @@ export interface DuplicateTestGroup { fingerprint: string; keptTestId: string; r
 export interface TestDeduplicationResult { originalCount: number; deduplicatedCount: number; removedCount: number; groups: DuplicateTestGroup[]; }
 export interface AutomatedStepResult {
   stepId: string; order: number; action: GeneratedTestAction; description: string; status: TestRunStatus; expected?: string; actual?: string;
-  currentUrl?: string; screenshotArtifactId?: string; errorMessage?: string; failureKind?: TestFailureKind; locatorUsed?: LocatorCandidate;
+  currentUrl?: string; beforeScreenshotArtifactId?: string; screenshotArtifactId?: string; errorMessage?: string; failureKind?: TestFailureKind; locatorUsed?: LocatorCandidate;
+  visualChange?: { sourceStepOrder: number; sourceAction: GeneratedTestAction; sourceDescription: string; beforeUrl: string; afterUrl: string; beforeScrollY: number; afterScrollY: number };
   startedAt?: string; completedAt?: string; durationMs?: number;
+}
+export type TestDispatchStatus = "queued" | "dispatching" | "retrying" | "dispatched" | "exhausted";
+export interface TestDispatchState {
+  status: TestDispatchStatus; attemptCount: number; nextAttemptAt?: string; lastAttemptAt?: string;
+  dispatchedAt?: string; lastError?: string;
+}
+export interface TestRevalidationResult {
+  attemptedAt: string; originalStatus: TestRunStatus; originalFailureKind?: TestFailureKind; originalMessage?: string;
+  originalScreenshotArtifactIds?: string[]; finalStatus: TestRunStatus; recovered: boolean;
+}
+export interface TestRunReview {
+  classification: TestRunReviewClassification; note?: string; reviewedAt: string; defectId?: string;
 }
 export interface AutomatedTestRun {
   id: string; analysisId: string; pageId?: string; scenarioId: string; status: TestRunStatus; stepResults: AutomatedStepResult[];
   consoleIssues: CapturedConsoleMessage[]; networkIssues: CapturedNetworkIssue[]; screenshotArtifactIds: string[];
   startedAt?: string; completedAt?: string; durationMs?: number; error?: AnalysisError; failureKind?: TestFailureKind;
   trigger?: "initial" | "manual_rerun" | "approved_run" | "suite_run"; scenarioRevision?: number; scenarioSnapshot?: GeneratedTestScenario;
-  suiteId?: string; suiteRunId?: string; queuedAt?: string;
+  suiteId?: string; suiteRunId?: string; retryOfSuiteRunId?: string; queuedAt?: string; dispatch?: TestDispatchState; revalidation?: TestRevalidationResult; review?: TestRunReview;
 }
 export interface TestSuite {
   id: string; analysisId: string; name: string; testIds: string[]; createdAt: string; updatedAt: string;
+}
+export type RegressionChangeStatus = "new_failure" | "persistent_failure" | "resolved" | "stable_success" | "added" | "removed" | "unverified";
+export interface RegressionTestChange {
+  key: string; status: RegressionChangeStatus; title: string; category: GeneratedTestScenario["category"];
+  currentScenarioId?: string; baselineScenarioId?: string; currentRunStatus?: TestRunStatus; baselineRunStatus?: TestRunStatus;
+}
+export interface RegressionComparison {
+  currentAnalysisId: string; baselineAnalysisId: string; currentCreatedAt: string; baselineCreatedAt: string;
+  currentSuccessRate: number; baselineSuccessRate: number; successRateDelta: number;
+  newFailureCount: number; persistentFailureCount: number; resolvedCount: number; stableSuccessCount: number;
+  addedScenarioCount: number; removedScenarioCount: number; unverifiedCount: number; changes: RegressionTestChange[];
+}
+export type QaDefectStatus = "new" | "investigating" | "in_progress" | "revalidation_requested" | "resolved" | "deferred";
+export type QaDefectSeverity = "low" | "medium" | "high" | "critical";
+export type QaDefectPriority = "P1" | "P2" | "P3" | "P4";
+export interface QaDefectNote { id: string; text: string; author: string; createdAt: string; }
+export interface QaDefectHistoryEntry { id: string; status: QaDefectStatus; description: string; author: string; createdAt: string; }
+export interface QaDefect {
+  id: string; analysisId: string; sourceRunId: string; scenarioId: string; scenarioTitle: string; targetUrl: string;
+  title: string; description: string; status: QaDefectStatus; severity: QaDefectSeverity; priority: QaDefectPriority; assignee: string;
+  failureSummary: string; failedStepOrders: number[]; screenshotArtifactIds: string[]; notes: QaDefectNote[]; history: QaDefectHistoryEntry[];
+  createdAt: string; updatedAt: string;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {

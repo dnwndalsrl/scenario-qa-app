@@ -1,5 +1,6 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import type { AutomatedStepResult, AutomatedTestRun, CapturedConsoleMessage, CapturedNetworkIssue, GeneratedTestScenario, GeneratedTestStep, LocatorCandidate, PageSnapshot, TestFailureKind } from "../../shared/types/analysis";
+import type { AutomatedStepResult, AutomatedTestRun, CapturedConsoleMessage, CapturedNetworkIssue, GeneratedTestAction, GeneratedTestScenario, GeneratedTestStep, LocatorCandidate, PageSnapshot, TestFailureKind } from "../../shared/types/analysis";
+import type { BrowserAuthentication } from "../../shared/types/authentication";
 import { AppError } from "../../shared/errors";
 import { getAnalysisConfig } from "../config";
 import { assertRedirectAllowed } from "../security/url-validator";
@@ -8,11 +9,15 @@ import { savePngArtifact } from "../storage/artifact-store";
 import { createId } from "../utils/id";
 import { inferClickOutcome, urlMatchesExpected, verifyClickOutcome } from "./click-outcome";
 import { resolveLocator } from "./locator-resolver";
+import { assertAuthenticationActive, authenticateContext } from "./form-authentication";
 
 interface StepExecution { locatorUsed?: LocatorCandidate; actual?: string; }
 interface InteractionState { visible: boolean; text?: string; value?: string; checked?: boolean; attributes: Record<string, string>; }
+interface VisualState { screenshot?: Buffer; url: string; scrollY: number; }
+interface VisualBaseline { step: GeneratedTestStep; state: VisualState; }
+const visualEvidenceActions = new Set<GeneratedTestAction>(["scroll_to_ratio", "scroll_by", "scroll_into_view", "click", "fill", "select", "press", "check", "uncheck"]);
 
-export async function executeGeneratedTests(snapshot: PageSnapshot, scenarios: GeneratedTestScenario[]): Promise<AutomatedTestRun[]> {
+export async function executeGeneratedTests(snapshot: PageSnapshot, scenarios: GeneratedTestScenario[], options: { authentication?: BrowserAuthentication } = {}): Promise<AutomatedTestRun[]> {
   const results: AutomatedTestRun[] = [];
   let browser: Browser | undefined;
   try {
@@ -20,7 +25,7 @@ export async function executeGeneratedTests(snapshot: PageSnapshot, scenarios: G
     if (executable) browser = await chromium.launch({ headless: true });
     for (const scenario of scenarios) {
       if (!isExecutable(scenario, snapshot)) { results.push(blockedRun(snapshot.analysisId, scenario)); continue; }
-      results.push(await executeScenario(browser!, snapshot, scenario));
+      results.push(await executeScenario(browser!, snapshot, scenario, options.authentication));
     }
     return results;
   } catch (error) {
@@ -50,31 +55,51 @@ function blockedRun(analysisId: string, scenario: GeneratedTestScenario): Automa
   };
 }
 
-async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenario: GeneratedTestScenario): Promise<AutomatedTestRun> {
+async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenario: GeneratedTestScenario, authentication?: BrowserAuthentication): Promise<AutomatedTestRun> {
   const config = getAnalysisConfig(); const started = Date.now();
   const context = await browser.newContext({ viewport: snapshot.viewport, serviceWorkers: "block" });
+  if (authentication) {
+    try { await authenticateContext(context, authentication, snapshot.finalUrl, config.testStepTimeoutMs); }
+    catch (error) { await context.close().catch(() => undefined); return authenticationFailedRun(snapshot, scenario, error, started); }
+  }
   const page = await context.newPage(); const consoleIssues: CapturedConsoleMessage[] = []; const networkIssues: CapturedNetworkIssue[] = []; const screenshotArtifactIds: string[] = [];
   captureIssues(page, consoleIssues, networkIssues);
   await guardNavigation(context, page);
   const run: AutomatedTestRun = { id: createId("run"), analysisId: snapshot.analysisId, pageId: snapshot.pageId, scenarioId: scenario.id, status: "running", stepResults: [], consoleIssues, networkIssues, screenshotArtifactIds, startedAt: new Date(started).toISOString() };
   let previousFailed = false;
+  let lastInteraction: VisualBaseline | undefined;
   try {
     if (scenario.steps[0]?.action !== "goto") {
       await page.goto(snapshot.finalUrl, { waitUntil: "domcontentloaded", timeout: config.testStepTimeoutMs });
+      if (authentication) await assertAuthenticationActive(page, authentication.loginUrl);
     }
     for (const step of scenario.steps) {
       if (previousFailed) { run.stepResults.push(baseStep(step, "blocked", "선행 단계 실패로 실행하지 않음")); continue; }
       const stepStarted = Date.now();
+      const stepStartVisual = shouldCaptureVisualBefore(step) ? await captureVisualState(page, true).catch(() => undefined) : undefined;
       try {
         const execution = await executeStep(page, snapshot, step, config.testStepTimeoutMs);
+        if (authentication) await assertAuthenticationActive(page, authentication.loginUrl);
         run.stepResults.push({ ...baseStep(step, "success"), expected: expectedValue(step), actual: execution.actual ?? await actualValue(page, snapshot, step, execution.locatorUsed), locatorUsed: execution.locatorUsed, currentUrl: sanitizeUrl(page.url()), startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        if (visualEvidenceActions.has(step.action) && stepStartVisual) lastInteraction = { step, state: stepStartVisual };
+        if (step.action === "goto") lastInteraction = undefined;
       } catch (error) {
         previousFailed = true;
         const failureKind = classifyFailure(step, error);
-        const screenshot = await page.screenshot({ type: "png", fullPage: false }).then((bytes) => savePngArtifact(snapshot.analysisId, bytes)).catch(() => undefined);
+        const afterVisual = await captureVisualState(page, true).catch(() => undefined);
+        const baseline: VisualBaseline | undefined = visualEvidenceActions.has(step.action) && stepStartVisual
+          ? { step, state: stepStartVisual }
+          : lastInteraction ?? (stepStartVisual ? { step, state: stepStartVisual } : undefined);
+        const beforeScreenshot = baseline?.state.screenshot ? await savePngArtifact(snapshot.analysisId, baseline.state.screenshot).catch(() => undefined) : undefined;
+        const screenshot = afterVisual?.screenshot ? await savePngArtifact(snapshot.analysisId, afterVisual.screenshot).catch(() => undefined) : undefined;
+        if (beforeScreenshot) screenshotArtifactIds.push(beforeScreenshot.id);
         if (screenshot) screenshotArtifactIds.push(screenshot.id);
+        const visualChange = baseline && afterVisual ? {
+          sourceStepOrder: baseline.step.order, sourceAction: baseline.step.action, sourceDescription: baseline.step.description,
+          beforeUrl: baseline.state.url, afterUrl: afterVisual.url, beforeScrollY: baseline.state.scrollY, afterScrollY: afterVisual.scrollY
+        } : undefined;
         const status = failureKind === "product_defect" ? "failed" : "error";
-        run.stepResults.push({ ...baseStep(step, status, error instanceof Error ? error.message : String(error)), expected: expectedValue(step), actual: await actualValue(page, snapshot, step).catch(() => undefined), failureKind, currentUrl: sanitizeUrl(page.url()), screenshotArtifactId: screenshot?.id, startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
+        run.stepResults.push({ ...baseStep(step, status, error instanceof Error ? error.message : String(error)), expected: expectedValue(step), actual: await actualValue(page, snapshot, step).catch(() => undefined), failureKind, currentUrl: sanitizeUrl(page.url()), beforeScreenshotArtifactId: beforeScreenshot?.id, screenshotArtifactId: screenshot?.id, visualChange, startedAt: new Date(stepStarted).toISOString(), completedAt: new Date().toISOString(), durationMs: Date.now() - stepStarted });
       }
     }
     run.status = run.stepResults.some((step) => step.status === "error") ? "error" : run.stepResults.some((step) => step.status === "failed") ? "failed" : "success";
@@ -84,6 +109,28 @@ async function executeScenario(browser: Browser, snapshot: PageSnapshot, scenari
     run.completedAt = new Date().toISOString(); run.durationMs = Date.now() - started;
     await context.close().catch(() => undefined);
   }
+}
+
+function authenticationFailedRun(snapshot: PageSnapshot, scenario: GeneratedTestScenario, error: unknown, started: number): AutomatedTestRun {
+  const appError = error instanceof AppError ? error : new AppError("AUTH_LOGIN_FAILED");
+  const completedAt = new Date().toISOString();
+  return {
+    id: createId("run"), analysisId: snapshot.analysisId, pageId: scenario.pageId, scenarioId: scenario.id,
+    status: "error", failureKind: "environment_error", consoleIssues: [], networkIssues: [], screenshotArtifactIds: [],
+    startedAt: new Date(started).toISOString(), completedAt, durationMs: Date.now() - started,
+    error: { code: appError.code, message: appError.message },
+    stepResults: scenario.steps.map((step) => ({ ...baseStep(step, "error", appError.message), failureKind: "environment_error" }))
+  };
+}
+
+function shouldCaptureVisualBefore(step: GeneratedTestStep): boolean {
+  return visualEvidenceActions.has(step.action) || isAssertion(step);
+}
+
+async function captureVisualState(page: Page, includeScreenshot = false): Promise<VisualState> {
+  const position = await page.evaluate(() => ({ url: window.location.href, scrollY: Math.round(window.scrollY) }));
+  const screenshot = includeScreenshot ? await page.screenshot({ type: "png", fullPage: false }).catch(() => undefined) : undefined;
+  return { screenshot, url: sanitizeUrl(position.url), scrollY: position.scrollY };
 }
 
 async function executeStep(page: Page, snapshot: PageSnapshot, step: GeneratedTestStep, defaultTimeout: number): Promise<StepExecution> {
@@ -386,7 +433,7 @@ function classifyFailure(step: GeneratedTestStep, error: unknown): TestFailureKi
     if (error.code === "TEST_SAFETY_BLOCKED") return "safety_blocked";
     if (["TEST_LOCATOR_NOT_FOUND", "TEST_LOCATOR_NOT_UNIQUE", "TEST_DYNAMIC_HEADER_HIDDEN", "TEST_TARGET_NOT_ACTIONABLE"].includes(error.code)) return "automation_limit";
     if (error.code === "TEST_CLICK_OUTCOME_MISMATCH") return "product_defect";
-    if (["TEST_EXECUTION_FAILED", "TEST_EXECUTION_TIMEOUT"].includes(error.code)) return "environment_error";
+    if (["TEST_EXECUTION_FAILED", "TEST_EXECUTION_TIMEOUT", "AUTH_LOGIN_FAILED", "AUTH_SESSION_EXPIRED"].includes(error.code)) return "environment_error";
   }
   if (step.action === "goto") return "environment_error";
   return isAssertion(step) ? "product_defect" : "automation_limit";

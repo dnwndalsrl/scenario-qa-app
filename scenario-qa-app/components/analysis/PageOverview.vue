@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AiPageAnalysis, PageSnapshot } from "~/shared/types/analysis";
+import { formatKoreanDateTime } from "~/utils/date-format";
 import { uiLabel } from "~/utils/ui-label";
 const props = defineProps<{ snapshot: PageSnapshot; pageAnalysis: AiPageAnalysis }>();
 const screenshot = computed(() => props.snapshot.screenshotArtifactId ? `/api/analyses/${props.snapshot.analysisId}/artifacts/${props.snapshot.screenshotArtifactId}` : "");
@@ -18,7 +19,7 @@ const screenshot = computed(() => props.snapshot.screenshotArtifactId ? `/api/an
       </div>
       <div class="page-overview__content">
         <div class="page-overview__title"><span class="tag">{{ uiLabel(pageAnalysis.pageType) }}</span><h3>{{ snapshot.title || '제목 없음' }}</h3><p>{{ pageAnalysis.pagePurpose }}</p></div>
-        <dl class="page-overview__meta"><div><dt>최종 URL</dt><dd>{{ snapshot.finalUrl }}</dd></div><div><dt>수집 시각</dt><dd>{{ new Date(snapshot.collectedAt).toLocaleString('ko-KR') }}</dd></div></dl>
+        <dl class="page-overview__meta"><div><dt>최종 URL</dt><dd>{{ snapshot.finalUrl }}</dd></div><div><dt>수집 시각</dt><dd>{{ formatKoreanDateTime(snapshot.collectedAt) }}</dd></div></dl>
         <div class="page-overview__limitations"><h3>분석 한계</h3><ul><li v-for="item in pageAnalysis.limitations" :key="item">{{ item }}</li></ul></div>
       </div>
     </div>

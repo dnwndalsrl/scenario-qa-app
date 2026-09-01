@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatKoreanDateTime } from "~/utils/date-format";
 interface WorkflowRunStatus {
   configured: boolean;
   reachable: boolean;
@@ -35,7 +36,7 @@ const regressionTone = computed(() => data.value?.productionRegression.conclusio
     <div v-if="data" class="grid grid--3"><div v-for="(service, name) in data.services" :key="name" class="metric"><span>{{ name }}</span><strong>{{ service.configured && (service.reachable ?? true) ? '정상' : '설정 필요' }}</strong><p class="muted">{{ service.role }}</p></div></div>
     <section v-if="data" class="card regression-status" aria-labelledby="regression-title">
       <div><p class="eyebrow">Production regression</p><h2 id="regression-title">운영 회귀 검증</h2><p>Doctor.AG의 동적 헤더, 리디렉션, 지연 요소와 Top 스크롤을 읽기 전용으로 확인합니다.</p></div>
-      <div class="regression-status__result"><span class="tag" :class="`tag--${regressionTone}`">{{ regressionLabel }}</span><strong v-if="data.productionRegression.runNumber">#{{ data.productionRegression.runNumber }}</strong><span v-if="data.productionRegression.checkedAt" class="muted">{{ new Date(data.productionRegression.checkedAt).toLocaleString('ko-KR') }}</span><a v-if="data.productionRegression.url" :href="data.productionRegression.url" target="_blank" rel="noreferrer">실행 기록 보기 →</a></div>
+      <div class="regression-status__result"><span class="tag" :class="`tag--${regressionTone}`">{{ regressionLabel }}</span><strong v-if="data.productionRegression.runNumber">#{{ data.productionRegression.runNumber }}</strong><span v-if="data.productionRegression.checkedAt" class="muted">{{ formatKoreanDateTime(data.productionRegression.checkedAt) }}</span><a v-if="data.productionRegression.url" :href="data.productionRegression.url" target="_blank" rel="noreferrer">실행 기록 보기 →</a></div>
     </section>
     <div v-if="data" class="notice">Supabase 응답 {{ data.latencyMs }}ms · 작업당 최대 {{ data.limits.workflowTimeoutMinutes }}분 · 사용자당 하루 {{ data.limits.dailyPerUser }}회</div>
   </div>

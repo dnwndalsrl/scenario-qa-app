@@ -15,7 +15,7 @@ export function rowToAnalysis(row: Record<string, any>): SiteAnalysis {
     : row.status === "running" || row.status === "cancel_requested" ? "launching_browser"
     : row.status === "cancelled" || row.status === "dispatch_failed" ? "failed" : row.status;
   return {
-    id: row.id, targetUrl: row.target_url, normalizedUrl: row.normalized_url, status, processStage: row.process_stage || "page_analysis", scenariosApprovedAt: row.scenarios_approved_at || undefined,
+    id: row.id, targetUrl: row.target_url, normalizedUrl: row.normalized_url, status, processStage: row.process_stage || "page_analysis", scenariosApprovedAt: row.scenarios_approved_at || undefined, authenticationEnabled: Boolean(row.authentication_enabled),
     progress: row.progress, currentMessage: row.current_message, options, pageIds: [], pageAnalysisIds: [], generatedTestIds: [], testRunIds: [],
     summary: row.summary || undefined, error: row.error || undefined, createdAt: row.created_at,
     startedAt: row.started_at || undefined, completedAt: row.completed_at || undefined, updatedAt: row.updated_at

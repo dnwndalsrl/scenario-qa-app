@@ -1,4 +1,5 @@
 import type { AnalysisDetail, AnalysisSummary, AutomatedTestRun, CrawledPage, CrawlQueueItem, GeneratedTestScenario, PageDetail, PageSnapshot, RequirementDocumentAnalysis, SiteAnalysis, SiteAnalysisOptions, SiteAnalysisStatus, SiteAnalysisSummary, SiteMapEdge, TestDeduplicationResult } from "../../../shared/types/analysis";
+import type { BrowserAuthentication } from "../../../shared/types/authentication";
 import { ANALYSIS_STAGES } from "../../../shared/types/analysis";
 import { AppError, ERROR_MESSAGES } from "../../../shared/errors";
 import { getAnalysisConfig } from "../../config";
@@ -32,8 +33,9 @@ let activeAnalysisId: string | undefined;
 const terminal = new Set<SiteAnalysisStatus>(["completed", "partially_completed", "failed"]);
 const deduplicationByAnalysis = new Map<string, TestDeduplicationResult>();
 const documentByAnalysis = new Map<string, RequirementDocumentAnalysis>();
+const authenticationByAnalysis = new Map<string, BrowserAuthentication>();
 
-export async function createSiteAnalysis(targetUrl: string, overrides: Partial<SiteAnalysisOptions> & { documentAnalysis?: RequirementDocumentAnalysis } = {}): Promise<SiteAnalysis> {
+export async function createSiteAnalysis(targetUrl: string, overrides: Partial<SiteAnalysisOptions> & { documentAnalysis?: RequirementDocumentAnalysis; authentication?: BrowserAuthentication } = {}): Promise<SiteAnalysis> {
   if (activeAnalysisId) throw new AppError("ANALYSIS_ALREADY_RUNNING", undefined, 409);
   const normalizedUrl = await validateTargetUrl(targetUrl);
   const existing = (await analysisRepository.list()).find((item) => item.normalizedUrl === normalizedUrl && !terminal.has(item.status));
@@ -50,6 +52,7 @@ export async function createSiteAnalysis(targetUrl: string, overrides: Partial<S
   };
   const analysis: SiteAnalysis = { id: createId("analysis"), targetUrl, normalizedUrl, status: "pending", progress: 2, currentMessage: "분석 작업을 준비하고 있습니다.", options, pageIds: [], pageAnalysisIds: [], generatedTestIds: [], testRunIds: [], createdAt: now, updatedAt: now };
   if (overrides.documentAnalysis) documentByAnalysis.set(analysis.id, overrides.documentAnalysis);
+  if (overrides.authentication) authenticationByAnalysis.set(analysis.id, overrides.authentication);
   await analysisRepository.save(analysis); void runAnalysis(analysis.id).catch(() => undefined); return analysis;
 }
 
@@ -65,17 +68,18 @@ export async function runAnalysis(id: string): Promise<void> {
   activeAnalysisId = id;
   try { const analysis = await requireAnalysis(id); if (analysis.options.mode === "site_crawl") await runSiteCrawl(analysis); else await runSinglePage(analysis); }
   catch (error) { await failAnalysis(id, error); }
-  finally { if (activeAnalysisId === id) activeAnalysisId = undefined; documentByAnalysis.delete(id); }
+  finally { if (activeAnalysisId === id) activeAnalysisId = undefined; documentByAnalysis.delete(id); authenticationByAnalysis.delete(id); }
 }
 
 async function runSinglePage(initial: SiteAnalysis) {
   const id = initial.id; let analysis = (await updateStage(id, "launching_browser", { startedAt: new Date().toISOString() }))!;
   const document = documentByAnalysis.get(id);
-  const snapshot = await collectPage(id, analysis.normalizedUrl, analysis.options.viewport, analysis.options.timeoutMs, async (stage) => { await updateStage(id, stage); });
+  const authentication = authenticationByAnalysis.get(id);
+  const snapshot = await collectPage(id, analysis.normalizedUrl, analysis.options.viewport, analysis.options.timeoutMs, async (stage) => { await updateStage(id, stage); }, authentication);
   await snapshotRepository.save(snapshot); await analysisRepository.update(id, { pageSnapshotId: snapshot.id });
   await updateStage(id, "analyzing_page"); const pageAnalysis = await analyzePageWithAi(snapshot, document); await pageAnalysisRepository.save(pageAnalysis); await analysisRepository.update(id, { pageAnalysisId: pageAnalysis.id, pageAnalysisIds: [pageAnalysis.id] });
   await updateStage(id, "generating_tests"); const tests = await generateTestsWithAi(snapshot, pageAnalysis, document); for (const test of tests) await generatedTestRepository.save(test); await analysisRepository.update(id, { generatedTestIds: tests.map((test) => test.id) });
-  await updateStage(id, "running_tests"); const runs = analysis.options.autoRunSafeTests ? await executeGeneratedTests(snapshot, tests) : []; for (const run of runs) await automatedTestRunRepository.save(run);
+  await updateStage(id, "running_tests"); const runs = analysis.options.autoRunSafeTests ? await executeGeneratedTests(snapshot, tests, { authentication }) : []; for (const run of runs) await automatedTestRunRepository.save(run);
   const summary = buildSummary(snapshot, pageAnalysis, tests, runs);
   await updateStage(id, "completed", { testRunIds: runs.map((run) => run.id), summary, completedAt: new Date().toISOString(), error: undefined });
 }
@@ -83,6 +87,7 @@ async function runSinglePage(initial: SiteAnalysis) {
 async function runSiteCrawl(initial: SiteAnalysis) {
   const config = getAnalysisConfig(); const started = Date.now(); const id = initial.id; const origin = new URL(initial.normalizedUrl).origin;
   const document = documentByAnalysis.get(id);
+  const authentication = authenticationByAnalysis.get(id);
   const queue = new CrawlQueue(initial.options.maxDepth, initial.options.maxPages, config.maxPagesPerUrlPattern);
   const edges: SiteMapEdge[] = []; const pages: CrawledPage[] = []; const snapshots = new Map<string, PageSnapshot>(); const pageByNormalized = new Map<string, CrawledPage>(); const finalUrlToPage = new Map<string, CrawledPage>(); const fingerprintToPage = new Map<string, CrawledPage>();
   const limitReasons = new Set<string>(); let skippedCount = 0; let failedCount = 0; let discoveredUrlCount = 1;
@@ -97,7 +102,7 @@ async function runSiteCrawl(initial: SiteAnalysis) {
       const page: CrawledPage = { id: createId("crawl-page"), analysisId: id, requestedUrl: item.url, normalizedUrl: item.normalizedUrl, status: "visiting", depth: item.depth, parentPageId: item.parentPageId, discoveredFromPageIds: item.parentPageId ? [item.parentPageId] : [], discoveredFromElementIds: item.discoveredFromElementId ? [item.discoveredFromElementId] : [], priority: item.priority, urlPattern: normalizeUrlPattern(item.normalizedUrl), generatedTestIds: [], testRunIds: [], createdAt: now, startedAt: now };
       pages.push(page); pageByNormalized.set(page.normalizedUrl, page); await crawlPageRepository.save(page); await analysisRepository.update(id, { pageIds: pages.map((value) => value.id), currentMessage: item.depth === 0 ? "시작 페이지를 수집하고 있습니다." : `${item.depth}단계 페이지를 수집하고 있습니다.`, status: item.depth === 0 ? "collecting_entry_page" : "crawling_pages", progress: monotonicProgress((await requireAnalysis(id)).progress, 15, pages.length - 1, queue.size, 30), crawlState: crawlState(page.id) });
       try {
-        const snapshot = await session.collect(id, item.normalizedUrl, Math.min(initial.options.timeoutMs, config.crawlPageTimeoutMs), { pageId: page.id, allowedOrigin: origin });
+        const snapshot = await session.collect(id, item.normalizedUrl, Math.min(initial.options.timeoutMs, config.crawlPageTimeoutMs), { pageId: page.id, allowedOrigin: origin, authentication: pages.length === 1 ? authentication : undefined });
         if (snapshot.contentType && !snapshot.contentType.includes("text/html") && !snapshot.contentType.includes("application/xhtml")) throw new AppError("CRAWL_URL_FILTERED", "HTML 페이지가 아닌 콘텐츠는 분석하지 않습니다.");
         const fingerprint = createPageFingerprint(snapshot); snapshot.domFingerprint = fingerprint;
         const duplicate = finalUrlToPage.get(snapshot.finalUrl) || fingerprintToPage.get(fingerprint);
@@ -149,7 +154,7 @@ async function runSiteCrawl(initial: SiteAnalysis) {
   const runs: AutomatedTestRun[] = []; await updateStage(id, "running_tests");
   if (initial.options.autoRunSafeTests) {
     const runnable = deduplicated.tests.filter((test) => test.safetyLevel === "safe" && test.autoExecutable && test.confidence >= .6).sort((a, b) => b.confidence - a.confidence).slice(0, config.maxTotalAutoRunTests);
-    for (const page of pages) { const snapshot = snapshots.get(page.id); if (!snapshot) continue; const pageTests = runnable.filter((test) => test.pageId === page.id); if (!pageTests.length) continue; try { runs.push(...await executeGeneratedTests(snapshot, pageTests)); } catch { analysisFailures += 1; } }
+    for (const page of pages) { const snapshot = snapshots.get(page.id); if (!snapshot) continue; const pageTests = runnable.filter((test) => test.pageId === page.id); if (!pageTests.length) continue; try { runs.push(...await executeGeneratedTests(snapshot, pageTests, { authentication })); } catch { analysisFailures += 1; } }
   }
   for (const run of runs) await automatedTestRunRepository.save(run);
   for (const page of pages) { page.testRunIds = runs.filter((run) => run.pageId === page.id).map((run) => run.id); await crawlPageRepository.save(page); }

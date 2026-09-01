@@ -17,6 +17,7 @@ on:
           - single_test
           - approved_tests
           - suite_tests
+          - scenario_edit
       test_id:
         description: Supabase generated_tests UUID for single_test mode
         required: false
@@ -46,6 +47,7 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_PAGE_ANALYSIS_MODEL: ${{ secrets.OPENAI_PAGE_ANALYSIS_MODEL || 'gpt-5-mini' }}
       OPENAI_TEST_GENERATION_MODEL: ${{ secrets.OPENAI_TEST_GENERATION_MODEL || 'gpt-5-mini' }}
+      ANALYSIS_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.ANALYSIS_CREDENTIAL_ENCRYPTION_KEY }}
       ANALYSIS_SCREENSHOT_ENABLED: "true"
       DEFAULT_CRAWL_PAGES: ${{ vars.DEFAULT_CRAWL_PAGES || '3' }}
       MAX_CRAWL_PAGES: ${{ vars.MAX_CRAWL_PAGES || '5' }}
@@ -80,6 +82,9 @@ jobs:
       - name: Run test suite
         if: inputs.mode == 'suite_tests'
         run: npm run qa:run-suite -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Create scenario edit draft
+        if: inputs.mode == 'scenario_edit'
+        run: npm run qa:edit-scenario -- --analysis-id=${{ inputs.analysis_id }} --test-id=${{ inputs.test_id }} --request-id=${{ inputs.test_run_id }}
       - name: Mark interrupted analysis failed
         if: failure() && inputs.mode == 'analysis'
         run: npm run qa:mark-failed -- --analysis-id=${{ inputs.analysis_id }}

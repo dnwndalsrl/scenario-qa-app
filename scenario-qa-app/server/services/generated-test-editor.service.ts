@@ -3,14 +3,14 @@ import type { GeneratedTestAction, GeneratedTestScenario, PageSnapshot } from ".
 import { enforceSafety } from "../analysis/services/test-safety.service";
 import { createId } from "../utils/id";
 
-const actionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_hidden", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "assert_attribute", "assert_value", "assert_count", "click", "fill", "select", "press", "check", "uncheck"]);
+export const generatedTestActionSchema = z.enum(["goto", "scroll_to_ratio", "scroll_by", "scroll_into_view", "wait_for_stable", "assert_url", "assert_title", "assert_visible", "assert_hidden", "assert_in_viewport", "assert_scroll", "assert_enabled", "assert_text", "assert_attribute", "assert_value", "assert_count", "click", "fill", "select", "press", "check", "uncheck"]);
 
 export const updateGeneratedTestSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(500),
   purpose: z.string().trim().max(500),
   steps: z.array(z.object({
-    action: actionSchema,
+    action: generatedTestActionSchema,
     description: z.string().trim().min(1).max(300),
     elementId: z.string().trim().min(1).max(100).nullable().optional(),
     value: z.string().max(500).nullable().optional(),
@@ -18,7 +18,10 @@ export const updateGeneratedTestSchema = z.object({
     timeoutMs: z.number().int().min(1000).max(30000).nullable().optional()
   })).min(1).max(10)
 });
-export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({ pageId: z.string().trim().min(1).max(100).nullable().optional() });
+export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({
+  pageId: z.string().trim().min(1).max(100).nullable().optional(),
+  requirementIds: z.array(z.string().trim().min(1).max(100)).max(40).optional()
+});
 
 export type UpdateGeneratedTestInput = z.infer<typeof updateGeneratedTestSchema>;
 export type CreateGeneratedTestInput = z.infer<typeof createGeneratedTestSchema>;
@@ -71,6 +74,6 @@ export function buildAddedScenario(analysisId: string, snapshot: PageSnapshot, i
   return buildEditedScenario({
     id: createId("test"), analysisId, pageId: snapshot.pageId, title: input.title, description: input.description, purpose: input.purpose,
     category: "interaction", safetyLevel: "safe", safetyReasons: [], confidence: 1, autoExecutable: true,
-    sourceElementIds: [], steps: [], generatedAt: now, revision: 0, source: "user", requirementIds: []
+    sourceElementIds: [], steps: [], generatedAt: now, revision: 0, source: "user", requirementIds: input.requirementIds || []
   }, snapshot, input);
 }

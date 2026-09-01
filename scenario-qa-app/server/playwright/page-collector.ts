@@ -1,5 +1,6 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import type { CapturedConsoleMessage, CapturedNetworkIssue, DiscoveredElement, DiscoveredElementType, PageObservationState, PageSnapshot, PageStateObservation } from "../../shared/types/analysis";
+import type { BrowserAuthentication } from "../../shared/types/authentication";
 import { AppError } from "../../shared/errors";
 import { getAnalysisConfig } from "../config";
 import { sanitizeText, sanitizeUrl } from "../security/sensitive-data";
@@ -8,6 +9,7 @@ import { savePngArtifact } from "../storage/artifact-store";
 import { createId } from "../utils/id";
 import { buildLocatorCandidates } from "./locator-builder";
 import { markLocatorUniqueness } from "./locator-resolver";
+import { authenticateContext } from "./form-authentication";
 
 interface RawElement {
   tagName: string; role?: string; accessibleName?: string; label?: string; text?: string; placeholder?: string; testId?: string;
@@ -20,9 +22,9 @@ interface ObservedRawElement extends RawElement { observedStates: PageObservatio
 
 const RISK_WORDS = /삭제|탈퇴|결제|주문|구매|환불|승인|발송|전송|제출|등록|수정|저장|비밀번호\s*변경|권한\s*변경|delete|remove|purchase|payment|checkout|refund|submit|save|update|send/i;
 
-export async function collectPage(analysisId: string, requestedUrl: string, viewport: { width: number; height: number }, timeoutMs: number, onStage?: (stage: "loading_page" | "collecting_page") => Promise<void>): Promise<PageSnapshot> {
+export async function collectPage(analysisId: string, requestedUrl: string, viewport: { width: number; height: number }, timeoutMs: number, onStage?: (stage: "loading_page" | "collecting_page") => Promise<void>, authentication?: BrowserAuthentication): Promise<PageSnapshot> {
   const session = await PageCollectionSession.create(viewport);
-  try { return await session.collect(analysisId, requestedUrl, timeoutMs, { onStage }); }
+  try { return await session.collect(analysisId, requestedUrl, timeoutMs, { onStage, authentication }); }
   finally { await session.close(); }
 }
 
@@ -35,15 +37,16 @@ export class PageCollectionSession {
     const context = await browser.newContext({ viewport, ignoreHTTPSErrors: false, serviceWorkers: "block" });
     return new PageCollectionSession(browser, context);
   }
-  collect(analysisId: string, requestedUrl: string, timeoutMs: number, options: { pageId?: string; allowedOrigin?: string; onStage?: (stage: "loading_page" | "collecting_page") => Promise<void> } = {}) {
+  collect(analysisId: string, requestedUrl: string, timeoutMs: number, options: { pageId?: string; allowedOrigin?: string; onStage?: (stage: "loading_page" | "collecting_page") => Promise<void>; authentication?: BrowserAuthentication } = {}) {
     return collectPageInContext(this.context, analysisId, requestedUrl, timeoutMs, options);
   }
   async close() { await this.context.close().catch(() => undefined); await this.browser.close().catch(() => undefined); }
 }
 
-async function collectPageInContext(context: BrowserContext, analysisId: string, requestedUrl: string, timeoutMs: number, options: { pageId?: string; allowedOrigin?: string; onStage?: (stage: "loading_page" | "collecting_page") => Promise<void> }): Promise<PageSnapshot> {
+async function collectPageInContext(context: BrowserContext, analysisId: string, requestedUrl: string, timeoutMs: number, options: { pageId?: string; allowedOrigin?: string; onStage?: (stage: "loading_page" | "collecting_page") => Promise<void>; authentication?: BrowserAuthentication }): Promise<PageSnapshot> {
   const config = getAnalysisConfig();
   let browser: Browser | undefined;
+  if (options.authentication) await authenticateContext(context, options.authentication, requestedUrl, timeoutMs);
   const page = await context.newPage();
   const consoleMessages: CapturedConsoleMessage[] = [];
   const networkIssues: CapturedNetworkIssue[] = [];

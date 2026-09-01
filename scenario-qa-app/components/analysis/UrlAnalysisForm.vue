@@ -1,10 +1,16 @@
 <script setup lang="ts">
-interface SubmitPayload { url: string; document?: File }
+import type { AnalysisAuthenticationInput } from "../../shared/types/authentication";
+
+interface SubmitPayload { url: string; document?: File; authentication?: AnalysisAuthenticationInput }
 const emit = defineEmits<{ submit: [payload: SubmitPayload] }>();
 defineProps<{ loading?: boolean }>();
 const url = ref("");
 const error = ref("");
 const document = ref<File>();
+const authenticationEnabled = ref(false);
+const loginUrl = ref("");
+const username = ref("");
+const password = ref("");
 
 function selectDocument(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -19,9 +25,19 @@ function selectDocument(event: Event) {
 }
 function submit() {
   error.value = "";
-  try { const parsed = new URL(url.value.trim()); if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(); }
+  let target: URL;
+  try { target = new URL(url.value.trim()); if (!["http:", "https:"].includes(target.protocol)) throw new Error(); }
   catch { error.value = "http:// 또는 https://로 시작하는 올바른 URL을 입력해 주세요."; return; }
-  emit("submit", { url: url.value.trim(), document: document.value });
+  let authentication: AnalysisAuthenticationInput | undefined;
+  if (authenticationEnabled.value) {
+    let login: URL;
+    try { login = new URL(loginUrl.value.trim()); if (!["http:", "https:"].includes(login.protocol)) throw new Error(); }
+    catch { error.value = "올바른 로그인 페이지 URL을 입력해 주세요."; return; }
+    if (login.origin !== target.origin) { error.value = "보안을 위해 로그인 주소와 테스트 URL은 같은 사이트여야 합니다."; return; }
+    if (!username.value.trim() || !password.value) { error.value = "테스트 계정의 아이디와 비밀번호를 입력해 주세요."; return; }
+    authentication = { loginUrl: login.toString(), username: username.value.trim(), password: password.value };
+  }
+  emit("submit", { url: target.toString(), document: document.value, authentication });
 }
 </script>
 
@@ -44,6 +60,15 @@ function submit() {
           <span class="document-upload__action">{{ document ? "파일 변경" : "PDF 선택" }}</span>
           <input id="requirements-pdf" type="file" accept="application/pdf,.pdf" @change="selectDocument">
         </label>
+      </section>
+      <section class="input-block authentication-block">
+        <label class="authentication-toggle"><input v-model="authenticationEnabled" type="checkbox"><span><strong>로그인이 필요한 페이지</strong><small>동일 사이트의 일반 아이디·비밀번호 로그인만 지원합니다.</small></span><b>{{ authenticationEnabled ? "사용" : "사용 안 함" }}</b></label>
+        <div v-if="authenticationEnabled" class="authentication-fields">
+          <label><span>로그인 페이지 URL</span><input v-model="loginUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/login" required></label>
+          <label><span>테스트 계정 아이디·이메일</span><input v-model="username" type="text" autocomplete="username" placeholder="qa@example.com" required></label>
+          <label><span>테스트 계정 비밀번호</span><input v-model="password" type="password" autocomplete="current-password" placeholder="비밀번호 입력" required></label>
+          <p><span aria-hidden="true">🔒</span> 계정 정보는 암호화해 저장하며 화면·보고서·로그에 표시하지 않습니다. 소셜 로그인, OTP, CAPTCHA는 지원하지 않습니다.</p>
+        </div>
       </section>
     </div>
     <p v-if="error" class="error-box" role="alert">{{ error }}</p>

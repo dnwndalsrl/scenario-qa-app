@@ -2,6 +2,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../../shared/types/analysis";
+import { executeWithAutoRevalidation } from "./test-revalidation";
+import { loadAnalysisAuthentication } from "../../server/services/analysis-authentication.service";
 
 function env(name: string): string {
   const value = process.env[name];
@@ -31,6 +33,7 @@ export async function runSingleTest(analysisId: string, testId: string, testRunI
   if (!snapshot) throw new Error("Page snapshot was not found");
 
   const scenario = testRow.payload as GeneratedTestScenario;
+  const authentication = await loadAnalysisAuthentication(client, analysisId);
   const queued = runRow.payload as AutomatedTestRun;
   const workRoot = path.resolve(process.cwd(), ".qa-runs", analysisId, testRunId);
   await mkdir(workRoot, { recursive: true });
@@ -40,11 +43,15 @@ export async function runSingleTest(analysisId: string, testId: string, testRunI
 
   try {
     const { executeGeneratedTests } = await import("../../server/playwright/test-executor");
-    const [executed] = await executeGeneratedTests(snapshot, [scenario]);
-    if (!executed) throw new Error("Test executor returned no result");
+    const executed = await executeWithAutoRevalidation(async () => {
+      const [result] = await executeGeneratedTests(snapshot, [scenario], { authentication });
+      if (!result) throw new Error("Test executor returned no result");
+      return result;
+    });
     const completed: AutomatedTestRun = {
       ...executed, id: queued.id, analysisId, trigger: queued.trigger || "manual_rerun",
-      suiteId: queued.suiteId, suiteRunId: queued.suiteRunId, queuedAt: queued.queuedAt,
+      suiteId: queued.suiteId, suiteRunId: queued.suiteRunId, retryOfSuiteRunId: queued.retryOfSuiteRunId, queuedAt: queued.queuedAt,
+      dispatch: queued.dispatch,
       scenarioRevision: scenario.revision || 1, scenarioSnapshot: structuredClone(scenario)
     };
     await uploadArtifacts(client, analysis.user_id, analysisId, completed);
@@ -74,6 +81,7 @@ async function updateRun(client: SupabaseClient, id: string, payload: AutomatedT
 
 async function uploadArtifacts(client: SupabaseClient, userId: string, analysisId: string, run: AutomatedTestRun) {
   const sourceIds = new Set(run.screenshotArtifactIds);
+  for (const id of run.revalidation?.originalScreenshotArtifactIds || []) sourceIds.add(id);
   for (const step of run.stepResults) if (step.screenshotArtifactId) sourceIds.add(step.screenshotArtifactId);
   const { readArtifact } = await import("../../server/storage/artifact-store");
   for (const sourceId of sourceIds) {

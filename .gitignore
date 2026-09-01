@@ -43,3 +43,16 @@ starter-code/
 .northflank-cli/
 .vercel/
 .env.local
+
+# Local Codex, deployment, and test scratch data
+.deployment/
+.sync/
+.tools/
+scenario-qa-app/.codex-tmp/
+scenario-qa-app/.deploy-cache/
+scenario-qa-app/.npm-cache/
+scenario-qa-app/.test-tmp/
+scenario-qa-app/.tmp-test/
+scenario-qa-app/.tmp/
+scenario-qa-app/.vercel-global/
+scenario-qa-app/.vercel-xdg/

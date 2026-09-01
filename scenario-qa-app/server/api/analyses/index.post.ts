@@ -2,10 +2,17 @@ import { z } from "zod";
 import { validatePublicTargetUrl } from "../../security/public-url-validator";
 import { dispatchAnalysisWorkflow, githubConfigFromRuntime } from "../../services/github-actions.service";
 import { requireUser } from "../../services/supabase.service";
+import { createServiceSupabaseClient } from "../../services/supabase.service";
 import { RequirementDocumentSaveError, saveRequirementDocument } from "../../services/requirement-document-storage.service";
+import { saveAnalysisAuthentication } from "../../services/analysis-authentication.service";
 
 const requestSchema = z.object({
-  url: z.string().trim().min(1).max(2048)
+  url: z.string().trim().min(1).max(2048),
+  authentication: z.object({
+    loginUrl: z.string().trim().min(1).max(2048),
+    username: z.string().trim().min(1).max(320),
+    password: z.string().min(1).max(256)
+  }).optional()
 });
 
 export const FIXED_ANALYSIS_SCOPE = { mode: "single_page", maxPages: 1, maxDepth: 0 } as const;
@@ -31,6 +38,14 @@ export default defineEventHandler(async (event) => {
 
   const { client, user } = await requireUser(event);
   const normalizedUrl = await validatePublicTargetUrl(parsed.data.url);
+  let authentication = parsed.data.authentication;
+  if (authentication) {
+    const loginUrl = await validatePublicTargetUrl(authentication.loginUrl);
+    if (new URL(loginUrl).origin !== new URL(normalizedUrl).origin) {
+      throw createError({ statusCode: 400, statusMessage: "보안을 위해 로그인 주소와 테스트 URL은 같은 사이트여야 합니다.", data: { code: "AUTH_ORIGIN_MISMATCH" } });
+    }
+    authentication = { ...authentication, loginUrl };
+  }
   const options = FIXED_ANALYSIS_SCOPE;
   const { data, error } = await client.rpc("create_analysis_job", {
     p_target_url: parsed.data.url, p_normalized_url: normalizedUrl, p_mode: options.mode,
@@ -41,6 +56,19 @@ export default defineEventHandler(async (event) => {
   if (error) throw createError({ statusCode: error.message.includes("LIMIT") ? 429 : 400, statusMessage: error.message, data: { code: error.message } });
   const job = Array.isArray(data) ? data[0] : data;
   if (!job?.id) throw createError({ statusCode: 500, statusMessage: "분석 작업을 생성하지 못했습니다." });
+
+  if (authentication) {
+    const admin = createServiceSupabaseClient(event);
+    try {
+      await saveAnalysisAuthentication(admin, job.id, user.id, authentication, String(useRuntimeConfig(event).analysisCredentialEncryptionKey || ""));
+      const { error: flagError } = await admin.from("analyses").update({ authentication_enabled: true }).eq("id", job.id);
+      if (flagError) throw flagError;
+    } catch (cause) {
+      console.error("[analysis-authentication-save]", { analysisId: job.id, error: cause instanceof Error ? cause.name : "unknown" });
+      await admin.from("analyses").update({ status: "failed", progress: 100, current_message: "테스트 계정 설정을 저장하지 못했습니다.", error: { code: "AUTH_SAVE_FAILED", message: "테스트 계정 설정 저장 실패" }, completed_at: new Date().toISOString() }).eq("id", job.id);
+      throw createError({ statusCode: 500, statusMessage: "테스트 계정 설정을 저장하지 못했습니다.", data: { code: "AUTH_SAVE_FAILED" } });
+    }
+  }
 
   const processStage = pdf ? "document_analysis" : "page_analysis";
   if (pdf) {

@@ -39,6 +39,44 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(snapshot.networkIssues.some((item) => item.status === 404)).toBe(true);
   });
 
+  it("logs in before collecting and executing an authenticated page without leaking credentials", async () => {
+    const authentication = { loginUrl: `${fixtureUrl}/login`, username: "qa@example.com", password: "fixture-secret" };
+    const privateSnapshot = await collectPage("analysis-private", `${fixtureUrl}/private`, { width: 1440, height: 900 }, 15000, undefined, authentication);
+    const heading = privateSnapshot.elements.find((element) => element.testId === "private-title")!;
+    const scenario = makeScenario("authenticated-page", [{ action: "assert_visible", description: "회원 전용 제목 확인", elementId: heading.id, locator: heading.locatorCandidates.find((item) => item.unique)! }]);
+    scenario.analysisId = privateSnapshot.analysisId;
+    const [run] = await executeGeneratedTests(privateSnapshot, [scenario], { authentication });
+
+    expect(privateSnapshot.title).toBe("인증 전용 화면");
+    expect(run?.status, JSON.stringify(run)).toBe("success");
+    expect(JSON.stringify({ privateSnapshot, run })).not.toContain(authentication.password);
+    expect(JSON.stringify({ privateSnapshot, run })).not.toContain(authentication.username);
+  });
+
+  it("classifies login failure and session expiry as environment errors", async () => {
+    const authentication = { loginUrl: `${fixtureUrl}/login`, username: "qa@example.com", password: "fixture-secret" };
+    const privateSnapshot = await collectPage("analysis-private-session", `${fixtureUrl}/private`, { width: 1440, height: 900 }, 15000, undefined, authentication);
+    const heading = privateSnapshot.elements.find((element) => element.testId === "private-title")!;
+    const wrong = { ...authentication, password: "wrong-password" };
+    const wrongScenario = makeScenario("wrong-authentication", [{ action: "assert_visible", description: "회원 전용 제목 확인", elementId: heading.id, locator: heading.locatorCandidates.find((item) => item.unique)! }]);
+    wrongScenario.analysisId = privateSnapshot.analysisId;
+    const [failedLogin] = await executeGeneratedTests(privateSnapshot, [wrongScenario], { authentication: wrong });
+
+    const expire = privateSnapshot.elements.find((element) => element.testId === "expire-link")!;
+    const expiryScenario = makeScenario("expired-session", [{ action: "click", description: "세션 만료 재현", elementId: expire.id, locator: expire.locatorCandidates.find((item) => item.unique)! }]);
+    expiryScenario.analysisId = privateSnapshot.analysisId;
+    const [expired] = await executeGeneratedTests(privateSnapshot, [expiryScenario], { authentication });
+
+    expect(failedLogin).toMatchObject({ status: "error", failureKind: "environment_error", error: { code: "AUTH_LOGIN_FAILED" } });
+    expect(expired).toMatchObject({ status: "error", failureKind: "environment_error", stepResults: [expect.objectContaining({ errorMessage: "테스트 도중 로그인 세션이 만료되었습니다." })] });
+    expect(JSON.stringify({ failedLogin, expired })).not.toContain(authentication.password);
+  });
+
+  it("reports a login failure separately from a product defect", async () => {
+    const authentication = { loginUrl: `${fixtureUrl}/login`, username: "qa@example.com", password: "wrong-password" };
+    await expect(collectPage("analysis-private-failed", `${fixtureUrl}/private`, { width: 1440, height: 900 }, 5000, undefined, authentication)).rejects.toMatchObject({ code: "AUTH_LOGIN_FAILED" });
+  });
+
   it("초기·하향·상향 스크롤 상태를 수집하고 동적 요소의 노출 시점을 보존한다", () => {
     expect(snapshot.stateObservations?.map((item) => item.state)).toEqual([
       "initial", "scroll_25", "scroll_50", "scroll_75", "scroll_100", "scroll_up", "restored_top"
@@ -364,6 +402,12 @@ describe("Playwright 페이지 수집과 실행", () => {
     expect(runs[2]?.stepResults[1]).toMatchObject({ expected: "완료", actual: "완료" });
     expect(runs[3]?.stepResults[1]).toMatchObject({ expected: "3", actual: "3" });
     expect(runs[4]).toMatchObject({ failureKind: "product_defect", stepResults: [expect.any(Object), expect.objectContaining({ expected: "false", actual: "true", status: "failed" })] });
+    expect(runs[0]?.screenshotArtifactIds).toHaveLength(0);
+    expect(runs[4]?.screenshotArtifactIds).toHaveLength(2);
+    expect(runs[4]?.stepResults[1]).toMatchObject({
+      beforeScreenshotArtifactId: expect.stringMatching(/^artifact-/), screenshotArtifactId: expect.stringMatching(/^artifact-/),
+      visualChange: { sourceStepOrder: 1, sourceAction: "click", sourceDescription: "상세 정보 열기", beforeScrollY: 0, afterScrollY: 0 }
+    });
   });
 
   it("blocks reading a password value even when a scenario is marked safe", async () => {
