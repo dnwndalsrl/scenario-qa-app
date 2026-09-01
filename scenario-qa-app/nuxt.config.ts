@@ -13,6 +13,7 @@ export default defineNuxtConfig({
     githubWorkflowId: process.env.GITHUB_WORKFLOW_FILE ?? process.env.GITHUB_WORKFLOW_ID ?? "run-qa-analysis.yml",
     githubWorkflowRef: process.env.GITHUB_DEPLOY_BRANCH ?? process.env.GITHUB_WORKFLOW_REF ?? "main",
     dispatchRecoverySecret: process.env.DISPATCH_RECOVERY_SECRET ?? process.env.CRON_SECRET ?? "",
+    analysisCredentialEncryptionKey: process.env.ANALYSIS_CREDENTIAL_ENCRYPTION_KEY ?? "",
     public: {
       pollingIntervalMs: 3000,
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
@@ -23,6 +24,7 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: process.env.VERCEL ? "vercel" : "node-server",
+    serverAssets: [{ baseName: "pdf-fonts", dir: "server/assets/pdf-fonts" }],
     // Keep the bundle self-contained where possible, and trace any runtime-only
     // imports so Vercel includes them in the serverless function package.
     externals: { trace: true, inline: [/.*/] }

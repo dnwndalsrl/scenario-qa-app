@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { AnalysisDetail, RequirementDocumentAnalysis, SiteAnalysisStatus } from "../../shared/types/analysis";
+import { loadAnalysisAuthentication } from "../../server/services/analysis-authentication.service";
 
 const terminal = new Set<SiteAnalysisStatus>(["completed", "partially_completed", "failed"]);
 
@@ -36,10 +37,13 @@ export async function runQaAnalysis(analysisId: string): Promise<void> {
   await update(client, analysisId, { status: "running", progress: 2, current_message: "GitHub Actions 실행기가 분석을 시작했습니다.", started_at: new Date().toISOString(), github_run_id: githubRunId, github_run_url: githubRunUrl });
   const workflow = await client.from("workflow_runs").insert({ analysis_id: analysisId, user_id: job.user_id, status: "running", runner_name: process.env.RUNNER_NAME || "local-cli", sha: process.env.GITHUB_SHA || null, github_run_id: githubRunId, github_run_url: githubRunUrl, payload: { runAttempt: process.env.GITHUB_RUN_ATTEMPT || null } }).select("id").single();
   try {
-    const documentAnalysis = await prepareRequirementDocument(client, analysisId);
+    const [documentAnalysis, authentication] = await Promise.all([
+      prepareRequirementDocument(client, analysisId),
+      loadAnalysisAuthentication(client, analysisId)
+    ]);
     await update(client, analysisId, { process_stage: "page_analysis", current_message: "2단계 페이지 분석과 테스트 시나리오 생성을 시작합니다." });
     const engine = await import("../../server/analysis/services/site-analysis.service");
-    const local = await engine.createSiteAnalysis(job.normalized_url, { mode: job.mode, maxPages: job.max_pages, maxDepth: job.max_depth, autoRunSafeTests: false, documentAnalysis });
+    const local = await engine.createSiteAnalysis(job.normalized_url, { mode: job.mode, maxPages: job.max_pages, maxDepth: job.max_depth, autoRunSafeTests: false, documentAnalysis, authentication });
     let detail: AnalysisDetail;
     while (true) {
       detail = await engine.getAnalysisDetail(local.id);

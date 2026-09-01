@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AiPageAnalysis, PageRisk, PageSnapshot } from "~/shared/types/analysis";
+import { formatKoreanDateTime } from "~/utils/date-format";
 
 type IssueCategory = "analysis" | "console" | "network";
 type IssueTone = "danger" | "warning" | "neutral";
@@ -104,7 +105,7 @@ function requestTarget(value: string): string {
 }
 
 function formatDate(value: string): string {
-  return new Date(value).toLocaleString("ko-KR");
+  return formatKoreanDateTime(value);
 }
 </script>
 

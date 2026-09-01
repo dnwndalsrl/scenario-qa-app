@@ -1,4 +1,4 @@
-import type { PageSnapshot } from "../../../../../shared/types/analysis";
+import type { PageSnapshot, RequirementDocumentAnalysis } from "../../../../../shared/types/analysis";
 import { getOwnedAnalysis } from "../../../../services/analysis-records.service";
 import { buildAddedScenario, createGeneratedTestSchema } from "../../../../services/generated-test-editor.service";
 import { requireUser } from "../../../../services/supabase.service";
@@ -7,10 +7,16 @@ export default defineEventHandler(async (event) => {
   const { client } = await requireUser(event);
   const analysisId = getRouterParam(event, "analysisId") || "";
   const analysis = await getOwnedAnalysis(client, analysisId);
-  if (analysis.process_stage !== "scenario_review") throw createError({ statusCode: 409, statusMessage: "시나리오 검토 단계에서만 테스트를 추가할 수 있습니다." });
+  if (!["scenario_review", "report_complete"].includes(analysis.process_stage)) throw createError({ statusCode: 409, statusMessage: "시나리오 검토 또는 보고서 완료 단계에서만 테스트를 추가할 수 있습니다." });
   const parsed = createGeneratedTestSchema.safeParse(await readBody(event));
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "테스트 시나리오 입력값을 확인해 주세요." });
   const admin = client;
+  if (parsed.data.requirementIds?.length) {
+    const { data: documentRow, error: documentError } = await admin.from("requirement_documents").select("payload,status").eq("analysis_id", analysisId).maybeSingle();
+    const document = documentRow?.payload as RequirementDocumentAnalysis | undefined;
+    const validIds = new Set(document?.requirements.map((item) => item.id) || []);
+    if (documentError || documentRow?.status !== "completed" || parsed.data.requirementIds.some((id) => !validIds.has(id))) throw createError({ statusCode: 400, statusMessage: "연결할 요구사항을 확인해 주세요." });
+  }
   let pageDbId: string | null = null;
   if (parsed.data.pageId) {
     const { data: page } = await admin.from("analysis_pages").select("id").eq("analysis_id", analysisId).eq("source_id", parsed.data.pageId).single();

@@ -10,5 +10,8 @@ Production/Preview 환경에 다음 값을 등록합니다.
 - `NUXT_PUBLIC_APP_URL=https://배포주소`
 - `GITHUB_ACTIONS_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
 - `GITHUB_WORKFLOW_ID=run-qa-analysis.yml`, `GITHUB_WORKFLOW_REF=main`
+- `ANALYSIS_CREDENTIAL_ENCRYPTION_KEY` (32자 이상의 무작위 문자열, GitHub Actions secret과 같은 값)
 
 OpenAI 키와 Playwright 브라우저는 Vercel에 등록하지 않습니다. 배포 후 `/api/health`가 200인지 확인하고, 로그인한 상태에서 시스템 상태 화면의 Supabase와 GitHub Actions 설정이 정상인지 확인합니다.
+
+로그인 페이지 분석을 사용하려면 GitHub 저장소 Actions secret에도 `ANALYSIS_CREDENTIAL_ENCRYPTION_KEY`를 동일한 값으로 등록합니다. 키가 달라지면 저장된 테스트 계정을 복호화할 수 없습니다.

@@ -20,6 +20,20 @@ export type QaDefectUpdateInput = z.infer<typeof qaDefectUpdateSchema>;
 
 const statusLabel: Record<QaDefectStatus, string> = { new: "신규", investigating: "확인 중", in_progress: "수정 중", revalidation_requested: "재검증 요청", resolved: "해결", deferred: "보류" };
 
+export function buildAutomaticQaDefectInput(run: AutomatedTestRun, scenario: GeneratedTestScenario, note = ""): QaDefectCreateInput {
+  const failure = run.error?.message || run.stepResults.find((step) => ["failed", "error", "blocked"].includes(step.status))?.errorMessage || "테스트 실행 결과를 확인해 주세요.";
+  const productDefect = run.failureKind === "product_defect";
+  return {
+    runId: run.id,
+    title: `[테스트 실패] ${scenario.title}`,
+    description: note || failure,
+    severity: productDefect ? "high" : "medium",
+    priority: productDefect ? "P2" : "P3",
+    assignee: "",
+    note
+  };
+}
+
 export function buildQaDefect(id: string, run: AutomatedTestRun, scenario: GeneratedTestScenario, targetUrl: string, input: QaDefectCreateInput, author: string, now: string): QaDefect {
   const failedSteps = run.stepResults.filter((step) => ["failed", "error", "blocked"].includes(step.status));
   const failureSummary = run.error?.message || failedSteps.map((step) => step.errorMessage || `${step.description}: ${step.actual || "실패"}`).join(" / ") || "테스트 실행에 실패했습니다.";

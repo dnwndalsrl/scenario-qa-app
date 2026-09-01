@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AutomatedTestRun, GeneratedTestScenario } from "../../shared/types/analysis";
-import { applyQaDefectUpdate, buildQaDefect, qaDefectCreateSchema, qaDefectUpdateSchema } from "./qa-defect.service";
+import { applyQaDefectUpdate, buildAutomaticQaDefectInput, buildQaDefect, qaDefectCreateSchema, qaDefectUpdateSchema } from "./qa-defect.service";
 
 const scenario = { id: "test-1", title: "메뉴 이동 확인" } as GeneratedTestScenario;
 const run = {
@@ -33,5 +33,12 @@ describe("QA defect service", () => {
     expect(qaDefectCreateSchema.safeParse({ runId: "", title: "", description: "", severity: "high", priority: "P2", assignee: "", note: "" }).success).toBe(false);
     expect(qaDefectUpdateSchema.safeParse({}).success).toBe(false);
     expect(qaDefectUpdateSchema.safeParse({ status: "resolved" }).success).toBe(true);
+  });
+
+  it("builds a conservative default when a user classifies a run as an actual defect", () => {
+    expect(buildAutomaticQaDefectInput(run, scenario, "사용자 재현 완료")).toEqual({
+      runId: "run-1", title: "[테스트 실패] 메뉴 이동 확인", description: "사용자 재현 완료",
+      severity: "medium", priority: "P3", assignee: "", note: "사용자 재현 완료"
+    });
   });
 });

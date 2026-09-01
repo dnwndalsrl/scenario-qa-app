@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../../shared/types/analysis";
 import { revalidateIfNeeded } from "./test-revalidation";
+import { loadAnalysisAuthentication } from "../../server/services/analysis-authentication.service";
 
 function env(name: string) { const value = process.env[name]; if (!value) throw new Error(`${name} is required`); return value; }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
@@ -28,6 +29,7 @@ export async function runApprovedTests(analysisId: string, options: { preserveAn
   ]);
   if (!testRows?.length || !runRows?.length) throw new Error("Approved test queue is empty");
   const { executeGeneratedTests } = await import("../../server/playwright/test-executor");
+  const authentication = await loadAnalysisAuthentication(client, analysisId);
 
   try {
     const pageIds = [...new Set(testRows.filter((test) => runRows.some((run) => run.test_id === test.id)).map((test) => test.page_id || null))];
@@ -39,12 +41,12 @@ export async function runApprovedTests(analysisId: string, options: { preserveAn
       if (!snapshot) throw new Error("Page snapshot was not found");
       const pageTests = testRows.filter((test) => test.page_id === pageId && runRows.some((run) => run.test_id === test.id));
       await client.from("test_runs").update({ status: "running" }).in("id", pageTests.map((test) => runRows.find((run) => run.test_id === test.id)!.id));
-      const results = await executeGeneratedTests(snapshot, pageTests.map((test) => test.payload as GeneratedTestScenario));
+      const results = await executeGeneratedTests(snapshot, pageTests.map((test) => test.payload as GeneratedTestScenario), { authentication });
       for (const firstResult of results) {
         const testRow = pageTests.find((test) => test.source_id === firstResult.scenarioId)!;
         const scenario = testRow.payload as GeneratedTestScenario;
         const result = await revalidateIfNeeded(firstResult, async () => {
-          const [retry] = await executeGeneratedTests(snapshot, [scenario]);
+          const [retry] = await executeGeneratedTests(snapshot, [scenario], { authentication });
           if (!retry) throw new Error("Test revalidation returned no result");
           return retry;
         });

@@ -43,6 +43,8 @@ export async function dispatchApprovedTestsWorkflow(analysisId: string, config: 
   await dispatchWorkflow({ analysis_id: analysisId, mode: "approved_tests", test_id: "", test_run_id: "" }, config, fetcher);
 }
 
+export interface GitHubWorkflowStatus { name: string; state: string; url: string }
+
 export async function dispatchSuiteTestsWorkflow(analysisId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {
   if (!uuidPattern.test(analysisId)) throw new Error("Invalid analysis id");
   await dispatchWorkflow({ analysis_id: analysisId, mode: "suite_tests", test_id: "", test_run_id: "" }, config, fetcher);
@@ -66,6 +68,16 @@ export async function latestWorkflowRun(config: GitHubDispatchConfig, workflowId
     status: run.status as GitHubWorkflowRun["status"], conclusion: typeof run.conclusion === "string" ? run.conclusion : undefined,
     runNumber: Number(run.run_number), url: String(run.html_url), createdAt: String(run.created_at), updatedAt: String(run.updated_at), commitSha: String(run.head_sha)
   };
+}
+
+export async function getWorkflowStatus(config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<GitHubWorkflowStatus> {
+  const response = await fetcher(workflowDispatchUrl(config).replace(/\/dispatches$/, ""), {
+    headers: { accept: "application/vnd.github+json", authorization: `Bearer ${config.token}`, "x-github-api-version": "2022-11-28" },
+    signal: AbortSignal.timeout(6000)
+  });
+  if (!response.ok) throw new Error(`GitHub Actions workflow lookup failed (${response.status})`);
+  const payload = await response.json() as Record<string, unknown>;
+  return { name: String(payload.name || config.workflowId), state: String(payload.state || "unknown"), url: String(payload.html_url || "") };
 }
 
 export function githubConfigFromRuntime(config: ReturnType<typeof useRuntimeConfig>): GitHubDispatchConfig {

@@ -18,7 +18,10 @@ export const updateGeneratedTestSchema = z.object({
     timeoutMs: z.number().int().min(1000).max(30000).nullable().optional()
   })).min(1).max(10)
 });
-export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({ pageId: z.string().trim().min(1).max(100).nullable().optional() });
+export const createGeneratedTestSchema = updateGeneratedTestSchema.extend({
+  pageId: z.string().trim().min(1).max(100).nullable().optional(),
+  requirementIds: z.array(z.string().trim().min(1).max(100)).max(40).optional()
+});
 
 export type UpdateGeneratedTestInput = z.infer<typeof updateGeneratedTestSchema>;
 export type CreateGeneratedTestInput = z.infer<typeof createGeneratedTestSchema>;
@@ -71,6 +74,6 @@ export function buildAddedScenario(analysisId: string, snapshot: PageSnapshot, i
   return buildEditedScenario({
     id: createId("test"), analysisId, pageId: snapshot.pageId, title: input.title, description: input.description, purpose: input.purpose,
     category: "interaction", safetyLevel: "safe", safetyReasons: [], confidence: 1, autoExecutable: true,
-    sourceElementIds: [], steps: [], generatedAt: now, revision: 0, source: "user", requirementIds: []
+    sourceElementIds: [], steps: [], generatedAt: now, revision: 0, source: "user", requirementIds: input.requirementIds || []
   }, snapshot, input);
 }

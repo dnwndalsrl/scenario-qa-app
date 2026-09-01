@@ -61,9 +61,10 @@ describe("generated test editor", () => {
       description: "같은 페이지에서 섹션으로 스크롤합니다.",
       purpose: "요구사항 확인",
       pageId: null,
+      requirementIds: ["REQ-1"],
       steps: [{ action: "assert_in_viewport", description: "ABOUT US 섹션 표시", elementId: "element-1" }]
     });
-    expect(added).toMatchObject({ analysisId: "analysis-1", source: "user", revision: 1, safetyLevel: "safe", autoExecutable: true, requirementIds: [] });
+    expect(added).toMatchObject({ analysisId: "analysis-1", source: "user", revision: 1, safetyLevel: "safe", autoExecutable: true, requirementIds: ["REQ-1"] });
     expect(added.steps[0]).toMatchObject({ action: "assert_in_viewport", elementId: "element-1", locator: { unique: true } });
   });
 

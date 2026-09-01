@@ -31,6 +31,7 @@
     "nuxt": "^4.0.3",
     "openai": "^7.2.0",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.20.2",
     "vue": "^3.5.18",
     "vue-bundle-renderer": "^2.3.1",
     "vue-router": "^5.2.0",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.1.0",
+    "@types/pdfkit": "^0.17.6",
     "sass": "^1.89.2",
     "tsx": "^4.23.5",
     "typescript": "^5.9.2",

@@ -19,7 +19,7 @@ const projectRef = (() => {
 const client = createClient(url, key, { auth: { persistSession: false } });
 const { data, error } = await client
   .from("analyses")
-  .select("id,status")
+  .select("id,status,authentication_enabled")
   .eq("id", analysisId)
   .maybeSingle();
 
@@ -32,6 +32,10 @@ if (!data) {
     `Analysis ${analysisId} was not found in Supabase project ${projectRef}. ` +
       "Check the GitHub Actions SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets."
   );
+}
+
+if (data.authentication_enabled && !process.env.ANALYSIS_CREDENTIAL_ENCRYPTION_KEY) {
+  throw new Error("ANALYSIS_CREDENTIAL_ENCRYPTION_KEY is required for an authenticated analysis");
 }
 
 console.log(`Runner input is valid. Analysis ${analysisId} (${data.status}) exists in Supabase project ${projectRef}.`);
