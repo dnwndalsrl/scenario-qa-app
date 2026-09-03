@@ -15,6 +15,7 @@ const generatedTestEditorSql = readFileSync(new URL("./migrations/202608110004_g
 const authenticatedScenarioEditorSql = readFileSync(new URL("./migrations/202608110005_authenticated_scenario_editor.sql", import.meta.url), "utf8");
 const scenarioTestDispatchSql = readFileSync(new URL("./migrations/202608110006_scenario_test_dispatch_rpc.sql", import.meta.url), "utf8");
 const testSuitesSql = readFileSync(new URL("./migrations/202608240001_test_suites.sql", import.meta.url), "utf8");
+const uiAuditSql = readFileSync(new URL("./migrations/202609030001_ui_audit_intake.sql", import.meta.url), "utf8");
 describe("Supabase migration security", () => {
   it("enables RLS on every user-owned table", () => {
     for (const table of ["analyses","analysis_pages","page_snapshots","page_functions","generated_tests","generated_test_steps","test_runs","test_step_results","analysis_issues","analysis_summaries","workflow_runs","artifacts"]) expect(sql).toContain(`alter table public.${table} enable row level security`);
@@ -111,5 +112,18 @@ describe("Supabase migration security", () => {
     expect(testSuitesSql).toContain("alter table public.test_suites enable row level security");
     expect(testSuitesSql.match(/user_id = auth\.uid\(\)/g)).toHaveLength(5);
     expect(testSuitesSql).toContain("grant select, insert, update, delete on table public.test_suites to authenticated");
+  });
+  it("stores UI audit intake and design images behind owner-scoped RLS", () => {
+    expect(uiAuditSql).toContain("create table if not exists public.ui_audits");
+    expect(uiAuditSql).toContain("create table if not exists public.ui_design_references");
+    expect(uiAuditSql).toContain("create table if not exists public.ui_audit_artifacts");
+    expect(uiAuditSql).toContain("create table if not exists public.ui_audit_issues");
+    expect(uiAuditSql).toContain("alter table public.ui_audits enable row level security");
+    expect(uiAuditSql).toContain("alter table public.ui_design_references enable row level security");
+    expect(uiAuditSql).toContain("values('qa-ui-designs','qa-ui-designs',false,10485760");
+    expect(uiAuditSql).toContain("values('qa-ui-audit-artifacts','qa-ui-audit-artifacts',false,10485760");
+    expect(uiAuditSql).toContain("(storage.foldername(name))[1]=(select auth.uid()::text)");
+    expect(uiAuditSql).toContain("create or replace function public.create_ui_audit");
+    expect(uiAuditSql).toContain("v_user_id uuid := auth.uid()");
   });
 });

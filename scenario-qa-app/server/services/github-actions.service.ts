@@ -43,6 +43,11 @@ export async function dispatchApprovedTestsWorkflow(analysisId: string, config: 
   await dispatchWorkflow({ analysis_id: analysisId, mode: "approved_tests", test_id: "", test_run_id: "" }, config, fetcher);
 }
 
+export async function dispatchUiAuditWorkflow(auditId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {
+  if (!uuidPattern.test(auditId)) throw new Error("Invalid UI audit id");
+  await dispatchWorkflow({ analysis_id: auditId, mode: "ui_audit", test_id: "", test_run_id: "" }, config, fetcher);
+}
+
 export interface GitHubWorkflowStatus { name: string; state: string; url: string }
 
 export async function dispatchSuiteTestsWorkflow(analysisId: string, config: GitHubDispatchConfig, fetcher: typeof fetch = fetch): Promise<void> {

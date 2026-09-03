@@ -18,6 +18,7 @@ on:
           - approved_tests
           - suite_tests
           - scenario_edit
+          - ui_audit
       test_id:
         description: Supabase generated_tests UUID for single_test mode
         required: false
@@ -69,7 +70,11 @@ jobs:
       - name: Install Chromium
         run: npx playwright install chromium
       - name: Validate input and secrets
+        if: inputs.mode != 'ui_audit'
         run: npm run qa:validate-input -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Run UI audit
+        if: inputs.mode == 'ui_audit'
+        run: npm run qa:run-ui-audit -- --analysis-id=${{ inputs.analysis_id }}
       - name: Run QA analysis
         if: inputs.mode == 'analysis'
         run: npm run qa:run -- --analysis-id=${{ inputs.analysis_id }}
@@ -97,6 +102,9 @@ jobs:
       - name: Mark interrupted test suite failed
         if: failure() && inputs.mode == 'suite_tests'
         run: npm run qa:mark-suite-failed -- --analysis-id=${{ inputs.analysis_id }}
+      - name: Mark interrupted UI audit failed
+        if: failure() && inputs.mode == 'ui_audit'
+        run: npm run qa:mark-ui-audit-failed -- --analysis-id=${{ inputs.analysis_id }}
       - name: Upload short-lived diagnostic artifact
         if: always()
         uses: actions/upload-artifact@v4

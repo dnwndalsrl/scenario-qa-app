@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { dispatchAnalysisWorkflow, dispatchApprovedTestsWorkflow, dispatchScenarioEditWorkflow, dispatchSuiteTestsWorkflow, dispatchTestWorkflow, getWorkflowStatus, latestWorkflowRun, workflowDispatchUrl } from "./github-actions.service";
+import { dispatchAnalysisWorkflow, dispatchApprovedTestsWorkflow, dispatchScenarioEditWorkflow, dispatchSuiteTestsWorkflow, dispatchTestWorkflow, dispatchUiAuditWorkflow, getWorkflowStatus, latestWorkflowRun, workflowDispatchUrl } from "./github-actions.service";
 const config = { token: "secret-token", owner: "acme", repo: "probe", workflowId: "run-qa-analysis.yml", ref: "main" };
 
 describe("GitHub Actions dispatch", () => {
@@ -37,6 +37,12 @@ describe("GitHub Actions dispatch", () => {
     const requestId = "323e4567-e89b-42d3-a456-426614174000";
     await dispatchScenarioEditWorkflow(analysisId, testId, requestId, config, fetcher);
     expect(fetcher).toHaveBeenCalledWith(workflowDispatchUrl(config), expect.objectContaining({ body: JSON.stringify({ ref: "main", inputs: { analysis_id: analysisId, mode: "scenario_edit", test_id: testId, test_run_id: requestId } }) }));
+  });
+  it("sends the UI audit workflow mode", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    const auditId = "123e4567-e89b-42d3-a456-426614174000";
+    await dispatchUiAuditWorkflow(auditId, config, fetcher);
+    expect(fetcher).toHaveBeenCalledWith(workflowDispatchUrl(config), expect.objectContaining({ body: JSON.stringify({ ref: "main", inputs: { analysis_id: auditId, mode: "ui_audit", test_id: "", test_run_id: "" } }) }));
   });
   it("does not include the token in an upstream error", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response("bad", { status: 403 }));

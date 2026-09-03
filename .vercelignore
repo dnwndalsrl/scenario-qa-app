@@ -1,6 +1,8 @@
 .deployment/
 .tools/
 .sync/
+.npm-cache/
+.vercel-cli/
 scenario-qa-app/.deploy-cache/
 scenario-qa-app/.npm-cache/
 scenario-qa-app/.tmp/

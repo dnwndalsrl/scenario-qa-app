@@ -8,6 +8,8 @@
     "fixture": "node test/fixtures/site/server.mjs",
     "local:start": "node scripts/start-local.mjs",
     "qa:run": "tsx scripts/run-analysis.ts",
+    "qa:run-ui-audit": "tsx scripts/run-ui-audit.ts",
+    "qa:mark-ui-audit-failed": "tsx scripts/mark-ui-audit-failed.ts",
     "qa:run-test": "tsx scripts/run-single-test.ts",
     "qa:run-approved": "tsx scripts/run-approved-tests.ts",
     "qa:run-suite": "tsx scripts/run-suite-tests.ts",
