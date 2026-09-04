@@ -1,6 +1,7 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
-  [string]$ProductionUrl = "https://scenario-qa-app.vercel.app"
+  [string]$ProductionUrl = "https://scenario-qa-app.vercel.app",
+  [switch]$PreflightOnly
 )
 
 Set-StrictMode -Version Latest
@@ -8,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $appRoot = Join-Path $repoRoot "scenario-qa-app"
+$smokeCheck = Join-Path $PSScriptRoot "check-production.mjs"
 
 function Assert-LastCommand([string]$message) {
   if ($LASTEXITCODE -ne 0) {
@@ -40,7 +42,7 @@ try {
   if ($behind -gt 0) {
     throw "로컬 main이 origin/main보다 $behind개 커밋 뒤에 있습니다. 먼저 동기화해 주세요."
   }
-  if ($ahead -eq 0) {
+  if (-not $PreflightOnly -and $ahead -eq 0) {
     throw "origin/main에 새로 배포할 커밋이 없습니다."
   }
 
@@ -54,19 +56,22 @@ try {
     Pop-Location
   }
 
+  if ($PreflightOnly) {
+    Write-Host "사전 점검 완료: 푸시와 운영 확인은 실행하지 않았습니다."
+    return
+  }
+
   Write-Host "[3/4] main 푸시 및 Vercel 자동 배포 요청"
   git push origin main
   Assert-LastCommand "main 푸시에 실패했습니다. 같은 인증을 반복하지 말고 Git 인증 상태를 확인해 주세요."
 
   Write-Host "[4/4] 운영 엔드포인트 확인"
   Start-Sleep -Seconds 30
-  $env:PROBE_QA_PRODUCTION_URL = $ProductionUrl.TrimEnd("/")
-  node -e "const b=process.env.PROBE_QA_PRODUCTION_URL; Promise.all(['/api/health','/login'].map(async p=>{const r=await fetch(b+p,{redirect:'manual'}); if(!r.ok && !(p==='/login' && r.status>=300 && r.status<400)) throw new Error(p+' returned '+r.status); return p+' '+r.status})).then(v=>console.log(v.join(', '))).catch(e=>{console.error(e.message);process.exit(1)})"
+  & node $smokeCheck $ProductionUrl
   Assert-LastCommand "운영 엔드포인트 확인에 실패했습니다. Vercel 배포 상태를 한 번 확인해 주세요."
 
   Write-Host "배포 요청 및 운영 가용성 확인 완료: $ProductionUrl"
 }
 finally {
-  Remove-Item Env:PROBE_QA_PRODUCTION_URL -ErrorAction SilentlyContinue
   Pop-Location
 }
