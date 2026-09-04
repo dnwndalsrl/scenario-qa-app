@@ -63,3 +63,35 @@ For multi-step tasks, state a brief plan:
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 These guidelines are working if there are fewer unnecessary changes in diffs, fewer rewrites caused by overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## 5. Token-Efficient Deployment
+
+Apply these rules whenever the user asks to deploy this project. They are the default deployment contract unless the user explicitly requests a different process.
+
+### Preparation
+
+- Read `outputs/PROJECT_STATUS.md` and only the deployment configuration needed for the current release. Do not replay the conversation history to reconstruct deployment state.
+- Use the connected GitHub plugin to read the current `main` commit and repository files before preparing a release.
+- Reuse a successful typecheck, test, and production build result when no application source, dependency, environment, or runtime deployment configuration has changed since that verification.
+- If relevant application code changed after verification, run the smallest targeted check first and the required release check once. Never repeat a successful check without a concrete reason.
+
+### Deployment
+
+- The default Codex release path is the connected GitHub plugin: create one commit whose parent is the current `main` commit, then fast-forward `main` once. The existing GitHub-to-Vercel integration performs the production deployment.
+- `scripts/deploy-production.ps1` is a manual operator fallback for a normal user terminal. Do not run it from the Codex sandbox.
+- Do not use local Git fetch, temporary clones, alternate credential stores, or direct `vercel --prod` when the GitHub plugin is available.
+- Keep tool output compact. Avoid repeated polling, complete DOM dumps, and full build logs unless diagnosing a failure.
+- If GitHub plugin access or permissions fail once, stop, summarize the blocker, and request the minimum user action required.
+
+### Verification
+
+- After `main` is updated, make one concise production verification pass for `https://scenario-qa-app.vercel.app/api/health` and `/login`.
+- Add a targeted production smoke check only when the deployed change affects a critical path those two checks cannot cover, or when the user explicitly requests broader verification.
+- Do not repeat the same verification through browser automation, PowerShell, and deployment tooling after one method succeeds.
+- Report only the production URL, commit, deployment result, reused or executed checks, smoke-check result, and unresolved risk.
+
+### Security and Exceptions
+
+- Never print or store authentication tokens in the workspace.
+- Correctness and security take priority over token savings. Expand verification for authentication, data migration, payment, destructive operations, or other high-risk changes, and state why.
+- A user's explicit request such as "run the full test suite" overrides the corresponding default above, but all other deployment rules still apply.
