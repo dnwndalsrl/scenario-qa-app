@@ -43,3 +43,6 @@ jobs:
             $errors | ForEach-Object { Write-Error $_.Message }
             exit 1
           }
+      - name: Check production smoke script syntax
+        shell: pwsh
+        run: node --check scripts/check-production.mjs
