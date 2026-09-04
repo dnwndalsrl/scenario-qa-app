@@ -57,7 +57,7 @@ export function groupUiAuditIssues(issues: UiAuditIssue[]): UiAuditIssueGroup[] 
 
   return [...grouped.entries()]
     .map(([rule, groupedIssues]) => {
-      const severity = [...groupedIssues].sort((a, b) => severityRank[a.severity] - severityRank[b.severity])[0].severity;
+      const severity = [...groupedIssues].sort((a, b) => severityRank[a.severity] - severityRank[b.severity])[0]!.severity;
       return {
         rule,
         severity,
