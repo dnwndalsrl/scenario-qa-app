@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [string]$ProductionUrl = "https://scenario-qa-app.vercel.app",
   [switch]$PreflightOnly
