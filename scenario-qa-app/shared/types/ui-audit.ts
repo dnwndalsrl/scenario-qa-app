@@ -19,12 +19,30 @@ export interface UiDesignReference {
   signedUrl?: string;
 }
 
+export interface UiDesignComparison {
+  status: "matched" | "review" | "different";
+  differencePercent: number;
+  meanDifferencePercent: number;
+  dimensionMismatch: boolean;
+  referenceWidth: number;
+  referenceHeight: number;
+  actualWidth: number;
+  actualHeight: number;
+}
+
 export interface UiAuditArtifact { id: string; state: string; width: number; height: number; signedUrl?: string; }
 export interface UiAuditIssue {
   id: string; rule: UiAuditRule; severity: UiAuditSeverity; title: string; message: string; selector: string; state: string;
   actual: Record<string, string | number | boolean>; artifactSourceId?: string;
 }
-export interface UiAuditSummary { issueCount: number; highCount: number; mediumCount: number; lowCount: number; screenshotCount: number; }
+export interface UiAuditSummary {
+  issueCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  screenshotCount: number;
+  comparison?: UiDesignComparison;
+}
 
 export interface UiAudit {
   id: string;
