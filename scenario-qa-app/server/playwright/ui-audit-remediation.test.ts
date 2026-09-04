@@ -24,7 +24,7 @@ describe("groupUiAuditIssues", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]).toMatchObject({ rule: "clipped_content", affectedCount: 2, stateCount: 2 });
-    expect(groups[0].issues).toHaveLength(3);
+    expect(groups[0]!.issues).toHaveLength(3);
   });
 
   it("높은 심각도의 수정 단위를 먼저 보여준다", () => {
