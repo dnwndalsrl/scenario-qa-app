@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $appRoot = Join-Path $repoRoot "scenario-qa-app"
+$smokeCheck = Join-Path $PSScriptRoot "check-production.mjs"
 
 function Assert-LastCommand([string]$message) {
   if ($LASTEXITCODE -ne 0) {
@@ -66,29 +67,11 @@ try {
 
   Write-Host "[4/4] 운영 엔드포인트 확인"
   Start-Sleep -Seconds 30
-  $env:PROBE_QA_PRODUCTION_URL = $ProductionUrl.TrimEnd("/")
-  $smokeScript = @'
-const base = process.env.PROBE_QA_PRODUCTION_URL;
-const paths = ["/api/health", "/login"];
-
-Promise.all(paths.map(async (path) => {
-  const response = await fetch(base + path, { redirect: "manual" });
-  const loginRedirect = path === "/login" && response.status >= 300 && response.status < 400;
-  if (!response.ok && !loginRedirect) throw new Error(path + " returned " + response.status);
-  return path + " " + response.status;
-}))
-  .then((values) => console.log(values.join(", ")))
-  .catch((error) => {
-    console.error(error.message);
-    process.exit(1);
-  });
-'@
-  & node -e $smokeScript
+  & node $smokeCheck $ProductionUrl
   Assert-LastCommand "운영 엔드포인트 확인에 실패했습니다. Vercel 배포 상태를 한 번 확인해 주세요."
 
   Write-Host "배포 요청 및 운영 가용성 확인 완료: $ProductionUrl"
 }
 finally {
-  Remove-Item Env:PROBE_QA_PRODUCTION_URL -ErrorAction SilentlyContinue
   Pop-Location
 }
