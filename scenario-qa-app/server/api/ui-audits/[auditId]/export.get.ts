@@ -29,8 +29,9 @@ export default defineEventHandler(async (event) => {
   };
   const fileName = uiAuditWorkbookFileName(audit);
   const workbook = await buildUiAuditWorkbook(audit);
+  const fallbackFileName = `ui-qa-report-${(audit.completedAt || audit.createdAt).slice(0, 10).replaceAll("-", "")}.xlsx`;
   setResponseHeader(event, "Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  setResponseHeader(event, "Content-Disposition", `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  setResponseHeader(event, "Content-Disposition", `attachment; filename="${fallbackFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
   setResponseHeader(event, "Cache-Control", "private, no-store");
   return workbook;
 });

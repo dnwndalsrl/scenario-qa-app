@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ requireUser: vi.fn(), build: vi.fn(async () => Buffer.from("xlsx")), headers: vi.fn() }));
 vi.mock("../../../services/supabase.service", () => ({ requireUser: mocks.requireUser }));
-vi.mock("../../../services/ui-audit-workbook.service", () => ({ buildUiAuditWorkbook: mocks.build, uiAuditWorkbookFileName: () => "ui-qa-report-test-20260907.xlsx" }));
+vi.mock("../../../services/ui-audit-workbook.service", () => ({ buildUiAuditWorkbook: mocks.build, uiAuditWorkbookFileName: () => "ui-qa-report-한글-검사-20260907.xlsx" }));
 vi.stubGlobal("defineEventHandler", (handler: unknown) => handler);
 vi.stubGlobal("getRouterParam", () => "audit-1");
 vi.stubGlobal("setResponseHeader", mocks.headers);
@@ -28,6 +28,10 @@ describe("GET UI audit Excel export", () => {
     await expect(handler({})).resolves.toEqual(Buffer.from("xlsx"));
     expect(mocks.build).toHaveBeenCalledOnce();
     expect(mocks.headers).toHaveBeenCalledWith({}, "Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    const disposition = mocks.headers.mock.calls.find((call) => call[1] === "Content-Disposition")?.[2] as string;
+    expect(disposition).toContain('filename="ui-qa-report-20260907.xlsx"');
+    expect(disposition).toContain("filename*=UTF-8''ui-qa-report-%ED%95%9C%EA%B8%80-%EA%B2%80%EC%82%AC-20260907.xlsx");
+    expect([...disposition].every((character) => character.charCodeAt(0) < 128)).toBe(true);
   });
 
   it("rejects an unauthenticated request", async () => {
