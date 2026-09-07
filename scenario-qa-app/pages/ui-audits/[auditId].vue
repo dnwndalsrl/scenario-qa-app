@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { UiAudit, UiAuditRule, UiAuditSeverity } from "~/shared/types/ui-audit";
+import type { UiAudit, UiAuditReviewStatus, UiAuditRule, UiAuditSeverity } from "~/shared/types/ui-audit";
+import { countUiAuditReviews, uiAuditReviewStatusFor } from "~/shared/utils/ui-audit-review";
 import { groupUiAuditIssues, UI_AUDIT_RULE_GUIDANCE } from "~/shared/utils/ui-audit-remediation";
 const route = useRoute(); const { $api } = useNuxtApp();
 const { data, error, refresh } = await useFetch<{ audit: UiAudit }>(`/api/ui-audits/${route.params.auditId}`, { $fetch: $api });
@@ -13,11 +14,37 @@ const diffArtifact = computed(() => data.value?.audit.artifacts.find((artifact) 
 const pageArtifacts = computed(() => data.value?.audit.artifacts.filter((artifact) => artifact.state !== "design_diff") || []);
 const severityFilter = ref<"all" | UiAuditSeverity>("all");
 const ruleFilter = ref<"all" | UiAuditRule>("all");
+const reviewFilter = ref<"all" | UiAuditReviewStatus>("all");
 const issueGroups = computed(() => groupUiAuditIssues(data.value?.audit.issues || []));
 const visibleIssueGroups = computed(() => issueGroups.value.filter((group) =>
   (severityFilter.value === "all" || group.severity === severityFilter.value)
   && (ruleFilter.value === "all" || group.rule === ruleFilter.value)
+  && (reviewFilter.value === "all" || uiAuditReviewStatusFor(data.value?.audit.reviews || [], group.rule) === reviewFilter.value)
 ));
+const reviewLabels: Record<UiAuditReviewStatus, string> = { unreviewed: "미검토", fix_required: "수정 필요", false_positive: "오탐", deferred: "보류" };
+const reviewCounts = computed(() => countUiAuditReviews(issueGroups.value.map((group) => group.rule), data.value?.audit.reviews || []));
+const reviewDrafts = reactive<Partial<Record<UiAuditRule, { status: UiAuditReviewStatus; note: string }>>>({});
+const savingRule = ref<UiAuditRule>();
+const reviewMessage = ref("");
+watch(issueGroups, (groups) => {
+  for (const group of groups) {
+    if (reviewDrafts[group.rule]) continue;
+    const saved = data.value?.audit.reviews.find((review) => review.rule === group.rule);
+    reviewDrafts[group.rule] = { status: saved?.status || "unreviewed", note: saved?.note || "" };
+  }
+}, { immediate: true });
+const saveReview = async (rule: UiAuditRule) => {
+  const draft = reviewDrafts[rule];
+  if (!draft) return;
+  savingRule.value = rule; reviewMessage.value = "";
+  try {
+    const response = await $api<{ review: UiAudit["reviews"][number] }>(`/api/ui-audits/${route.params.auditId}/reviews`, { method: "PUT", body: { rule, ...draft } });
+    const reviews = data.value?.audit.reviews || [];
+    if (data.value) data.value.audit.reviews = [...reviews.filter((review) => review.rule !== rule), response.review];
+    reviewMessage.value = "판정을 저장했습니다.";
+  } catch { reviewMessage.value = "판정을 저장하지 못했습니다."; }
+  finally { savingRule.value = undefined; }
+};
 const severityLabel = (severity: UiAuditSeverity) => ({ high: "높음", medium: "보통", low: "낮음" }[severity]);
 const priorityLabel = (severity: UiAuditSeverity) => ({ high: "우선 수정", medium: "다음 수정", low: "개선 권장" }[severity]);
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -107,6 +134,16 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
                 <option v-for="group in issueGroups" :key="group.rule" :value="group.rule">{{ UI_AUDIT_RULE_GUIDANCE[group.rule].label }} ({{ group.issues.length }})</option>
               </select>
             </label>
+            <label>판정 상태
+              <select v-model="reviewFilter">
+                <option value="all">전체</option>
+                <option v-for="(label,status) in reviewLabels" :key="status" :value="status">{{ label }} ({{ reviewCounts[status] }})</option>
+              </select>
+            </label>
+          </div>
+          <div class="ui-review-summary">
+            <span v-for="(label,status) in reviewLabels" :key="status"><strong>{{ reviewCounts[status] }}</strong>{{ label }}</span>
+            <p v-if="reviewMessage" aria-live="polite">{{ reviewMessage }}</p>
           </div>
           <div v-if="visibleIssueGroups.length" class="ui-remediation__groups">
             <article v-for="group in visibleIssueGroups" :key="group.rule" class="ui-remediation-group">
@@ -131,6 +168,17 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
                   </article>
                 </div>
               </details>
+              <div v-if="reviewDrafts[group.rule]" class="ui-remediation-review">
+                <label>판정
+                  <select v-model="reviewDrafts[group.rule]!.status">
+                    <option v-for="(label,status) in reviewLabels" :key="status" :value="status">{{ label }}</option>
+                  </select>
+                </label>
+                <label>메모
+                  <textarea v-model="reviewDrafts[group.rule]!.note" maxlength="1000" rows="2" placeholder="판정 근거를 선택적으로 입력하세요." />
+                </label>
+                <button type="button" class="secondary-button" :disabled="savingRule === group.rule" @click="saveReview(group.rule)">{{ savingRule === group.rule ? "저장 중" : "저장" }}</button>
+              </div>
             </article>
           </div>
           <p v-else class="empty">선택한 조건에 해당하는 문제가 없습니다.</p>

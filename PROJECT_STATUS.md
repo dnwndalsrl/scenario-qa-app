@@ -14,6 +14,7 @@
 - The latest production release passed typecheck, the full test suite, the production build, and the read-only production regression.
 - The standard deployment script supports a safe `-PreflightOnly` path and validates `/api/health` and `/login` after a push.
 - Windows PowerShell 5.1 and PowerShell 7 syntax are checked by GitHub Actions when the deployment script changes.
+- UI QA remediation groups can be reviewed as unreviewed, fix required, false positive, or deferred with an optional saved note and status filter.
 
 ## Working rules
 
@@ -23,4 +24,4 @@
 
 ## Next action
 
-- Run one production UI audit without a design reference and verify that the remediation groups, filters, and detailed evidence are understandable with real findings.
+- Apply the UI audit review migration, then deploy the reviewed UI QA result workflow after approval.

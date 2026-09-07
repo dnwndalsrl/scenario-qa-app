@@ -2,6 +2,7 @@ export type UiAuditViewportPreset = "mobile" | "tablet" | "desktop";
 export type UiAuditStatus = "queued" | "running" | "completed" | "failed";
 export type UiAuditRule = "horizontal_overflow" | "clipped_content" | "element_overlap" | "small_target" | "low_contrast";
 export type UiAuditSeverity = "low" | "medium" | "high";
+export type UiAuditReviewStatus = "unreviewed" | "fix_required" | "false_positive" | "deferred";
 
 export interface UiAuditViewport {
   preset: UiAuditViewportPreset;
@@ -44,6 +45,13 @@ export interface UiAuditSummary {
   comparison?: UiDesignComparison;
 }
 
+export interface UiAuditReview {
+  rule: UiAuditRule;
+  status: UiAuditReviewStatus;
+  note: string;
+  updatedAt: string;
+}
+
 export interface UiAudit {
   id: string;
   name: string;
@@ -55,6 +63,7 @@ export interface UiAudit {
   hasReference: boolean;
   reference?: UiDesignReference;
   issues: UiAuditIssue[];
+  reviews: UiAuditReview[];
   artifacts: UiAuditArtifact[];
   summary?: UiAuditSummary;
   createdAt: string;
