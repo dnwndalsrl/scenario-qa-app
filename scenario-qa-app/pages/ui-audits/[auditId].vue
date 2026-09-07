@@ -26,6 +26,8 @@ const reviewCounts = computed(() => countUiAuditReviews(issueGroups.value.map((g
 const reviewDrafts = reactive<Partial<Record<UiAuditRule, { status: UiAuditReviewStatus; note: string }>>>({});
 const savingRule = ref<UiAuditRule>();
 const reviewMessage = ref("");
+const exportMessage = ref("");
+const exporting = ref(false);
 watch(issueGroups, (groups) => {
   for (const group of groups) {
     if (reviewDrafts[group.rule]) continue;
@@ -44,6 +46,20 @@ const saveReview = async (rule: UiAuditRule) => {
     reviewMessage.value = "판정을 저장했습니다.";
   } catch { reviewMessage.value = "판정을 저장하지 못했습니다."; }
   finally { savingRule.value = undefined; }
+};
+const downloadWorkbook = async () => {
+  if (!data.value || data.value.audit.status !== "completed") return;
+  exporting.value = true; exportMessage.value = "";
+  try {
+    const blob = await $api<Blob>(`/api/ui-audits/${route.params.auditId}/export`, { responseType: "blob" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeName = data.value.audit.name.normalize("NFKC").replace(/[^0-9A-Za-z가-힣_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "ui-audit";
+    const date = (data.value.audit.completedAt || data.value.audit.createdAt).slice(0, 10).replaceAll("-", "");
+    link.href = href; link.download = `ui-qa-report-${safeName}-${date}.xlsx`; link.click();
+    URL.revokeObjectURL(href); exportMessage.value = "엑셀 파일을 다운로드했습니다.";
+  } catch { exportMessage.value = "엑셀 파일을 다운로드하지 못했습니다."; }
+  finally { exporting.value = false; }
 };
 const severityLabel = (severity: UiAuditSeverity) => ({ high: "높음", medium: "보통", low: "낮음" }[severity]);
 const priorityLabel = (severity: UiAuditSeverity) => ({ high: "우선 수정", medium: "다음 수정", low: "개선 권장" }[severity]);
@@ -65,7 +81,11 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
     <template v-else-if="data">
       <div class="section-head">
         <div><p class="eyebrow">UI QA · 규칙 점검</p><h1>{{ data.audit.name }}</h1><p>{{ data.audit.targetUrl }}</p></div>
-        <button type="button" class="secondary-button" @click="() => refresh()">상태 새로고침</button>
+        <div>
+          <button v-if="data.audit.status === 'completed'" type="button" class="secondary-button" :disabled="exporting" @click="downloadWorkbook">{{ exporting ? "생성 중" : "엑셀 다운로드" }}</button>
+          <button type="button" class="secondary-button" @click="() => refresh()">상태 새로고침</button>
+          <p v-if="exportMessage" class="input-help">{{ exportMessage }}</p>
+        </div>
       </div>
       <section class="card ui-audit-queued">
         <span class="status-pill">{{ statusLabel }}</span>
