@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { QaDefect, QaDefectSeverity } from "~/shared/types/analysis";
 import type { UiAudit, UiAuditReviewStatus, UiAuditRule, UiAuditSeverity } from "~/shared/types/ui-audit";
 import { countUiAuditReviews, uiAuditReviewStatusFor } from "~/shared/utils/ui-audit-review";
 import { groupUiAuditIssues, UI_AUDIT_RULE_GUIDANCE } from "~/shared/utils/ui-audit-remediation";
@@ -28,11 +29,15 @@ const savingRule = ref<UiAuditRule>();
 const reviewMessage = ref("");
 const exportMessage = ref("");
 const exporting = ref(false);
+const defectDrafts = reactive<Partial<Record<UiAuditRule, { open: boolean; title: string; severity: QaDefectSeverity; note: string }>>>({});
+const creatingDefect = ref<UiAuditRule>();
+const defectMessage = ref("");
 watch(issueGroups, (groups) => {
   for (const group of groups) {
     if (reviewDrafts[group.rule]) continue;
     const saved = data.value?.audit.reviews.find((review) => review.rule === group.rule);
     reviewDrafts[group.rule] = { status: saved?.status || "unreviewed", note: saved?.note || "" };
+    defectDrafts[group.rule] = { open: false, title: `[UI QA] ${UI_AUDIT_RULE_GUIDANCE[group.rule].label}`, severity: group.severity, note: "" };
   }
 }, { immediate: true });
 const saveReview = async (rule: UiAuditRule) => {
@@ -46,6 +51,18 @@ const saveReview = async (rule: UiAuditRule) => {
     reviewMessage.value = "판정을 저장했습니다.";
   } catch { reviewMessage.value = "판정을 저장하지 못했습니다."; }
   finally { savingRule.value = undefined; }
+};
+const createDefect = async (rule: UiAuditRule) => {
+  const draft = defectDrafts[rule];
+  if (!draft) return;
+  creatingDefect.value = rule; defectMessage.value = "";
+  try {
+    const response = await $api<{ defect: QaDefect }>(`/api/ui-audits/${route.params.auditId}/defects`, { method: "POST", body: { rule, title: draft.title, severity: draft.severity, note: draft.note } });
+    const review = data.value?.audit.reviews.find((item) => item.rule === rule);
+    if (review) review.defectId = response.defect.id;
+    draft.open = false; defectMessage.value = "결함으로 등록했습니다.";
+  } catch { defectMessage.value = "결함을 등록하지 못했습니다."; }
+  finally { creatingDefect.value = undefined; }
 };
 const downloadWorkbook = async () => {
   if (!data.value || data.value.audit.status !== "completed") return;
@@ -164,6 +181,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
           <div class="ui-review-summary">
             <span v-for="(label,status) in reviewLabels" :key="status"><strong>{{ reviewCounts[status] }}</strong>{{ label }}</span>
             <p v-if="reviewMessage" aria-live="polite">{{ reviewMessage }}</p>
+            <p v-if="defectMessage" aria-live="polite">{{ defectMessage }}</p>
           </div>
           <div v-if="visibleIssueGroups.length" class="ui-remediation__groups">
             <article v-for="group in visibleIssueGroups" :key="group.rule" class="ui-remediation-group">
@@ -198,6 +216,18 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
                   <textarea v-model="reviewDrafts[group.rule]!.note" maxlength="1000" rows="2" placeholder="판정 근거를 선택적으로 입력하세요." />
                 </label>
                 <button type="button" class="secondary-button" :disabled="savingRule === group.rule" @click="saveReview(group.rule)">{{ savingRule === group.rule ? "저장 중" : "저장" }}</button>
+              </div>
+              <div v-if="uiAuditReviewStatusFor(data.audit.reviews, group.rule) === 'fix_required'" class="ui-defect-registration">
+                <NuxtLink v-if="data.audit.reviews.find(item => item.rule === group.rule)?.defectId" class="secondary-button" :to="`/defects?defect=${data.audit.reviews.find(item => item.rule === group.rule)?.defectId}`">결함 등록됨 · 상세 보기</NuxtLink>
+                <template v-else-if="defectDrafts[group.rule]">
+                  <button v-if="!defectDrafts[group.rule]!.open" type="button" class="secondary-button" @click="defectDrafts[group.rule]!.open = true">결함으로 등록</button>
+                  <form v-else class="ui-defect-registration__form" @submit.prevent="createDefect(group.rule)">
+                    <label>결함 제목<input v-model="defectDrafts[group.rule]!.title" required maxlength="160"></label>
+                    <label>심각도<select v-model="defectDrafts[group.rule]!.severity"><option value="critical">치명적</option><option value="high">높음</option><option value="medium">보통</option><option value="low">낮음</option></select></label>
+                    <label>담당 메모<textarea v-model="defectDrafts[group.rule]!.note" maxlength="1000" rows="2" /></label>
+                    <div><button type="button" class="secondary-button" @click="defectDrafts[group.rule]!.open = false">취소</button><button type="submit" class="secondary-button" :disabled="creatingDefect === group.rule">{{ creatingDefect === group.rule ? "등록 중" : "결함 등록" }}</button></div>
+                  </form>
+                </template>
               </div>
             </article>
           </div>

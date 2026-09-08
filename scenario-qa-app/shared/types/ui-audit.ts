@@ -50,6 +50,7 @@ export interface UiAuditReview {
   status: UiAuditReviewStatus;
   note: string;
   updatedAt: string;
+  defectId?: string;
 }
 
 export interface UiAudit {

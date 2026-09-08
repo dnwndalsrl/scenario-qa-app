@@ -4,6 +4,7 @@ import { filterQaDefects, summarizeQaDefects } from "~/shared/utils/qa-defect-da
 import { formatKoreanDate, formatKoreanDateTime } from "~/utils/date-format";
 
 const { $api } = useNuxtApp();
+const route = useRoute();
 const { data, error: loadError, status, refresh } = await useFetch<{ defects: QaDefect[] }>("/api/defects", { $fetch: $api, default: () => ({ defects: [] }) });
 const defects = ref<QaDefect[]>([]);
 const selectedId = ref("");
@@ -29,7 +30,7 @@ const selected = computed(() => defects.value.find((item) => item.id === selecte
 
 watch(data, (value) => {
   defects.value = value?.defects || [];
-  if (!defects.value.some((item) => item.id === selectedId.value)) selectedId.value = defects.value[0]?.id || "";
+  if (!defects.value.some((item) => item.id === selectedId.value)) selectedId.value = defects.value.find((item) => item.id === route.query.defect)?.id || defects.value[0]?.id || "";
 }, { immediate: true });
 watch(visibleDefects, (items) => {
   if (items.length && !items.some((item) => item.id === selectedId.value)) selectedId.value = items[0]!.id;
@@ -110,7 +111,7 @@ function downloadCsv() {
 
       <aside v-if="selected" class="card defect-detail">
         <header class="defect-detail__head"><div><span>{{ selected.priority }} · {{ severityLabel(selected.severity) }}</span><h2>{{ selected.title }}</h2><p>{{ selected.scenarioTitle }}</p></div><span class="defect-detail__status">{{ statusLabel(selected.status) }}</span></header>
-        <div class="defect-detail__links"><NuxtLink :to="`/analyses/${selected.analysisId}`">원본 분석 보고서 보기 →</NuxtLink><a :href="selected.targetUrl" target="_blank" rel="noopener noreferrer">대상 페이지 열기 ↗</a></div>
+        <div class="defect-detail__links"><NuxtLink v-if="selected.uiAuditId" :to="`/ui-audits/${selected.uiAuditId}`">원본 UI QA 결과 보기 →</NuxtLink><NuxtLink v-else :to="`/analyses/${selected.analysisId}`">원본 분석 보고서 보기 →</NuxtLink><a :href="selected.targetUrl" target="_blank" rel="noopener noreferrer">대상 페이지 열기 ↗</a></div>
         <p class="defect-detail__description">{{ selected.description }}</p>
 
         <section class="defect-proof"><strong>실패 근거</strong><p>{{ selected.failureSummary }}</p><small>실패 단계 {{ selected.failedStepOrders.join(', ') || '-' }} · 스크린샷 {{ selected.screenshotArtifactIds.length }}개</small><div v-if="selected.screenshotArtifactIds.length" class="defect-proof__images"><a v-for="artifactId in selected.screenshotArtifactIds" :key="artifactId" :href="`/api/analyses/${selected.analysisId}/artifacts/${artifactId}`" target="_blank"><img :src="`/api/analyses/${selected.analysisId}/artifacts/${artifactId}`" alt="결함 발생 시점 스크린샷"></a></div></section>
@@ -123,7 +124,8 @@ function downloadCsv() {
         </div>
         <label class="defect-detail__note">처리 메모<textarea v-model="noteDraft" maxlength="1000" rows="3" placeholder="진행 상황이나 확인 내용을 남겨주세요."></textarea></label>
         <details v-if="selected.notes.length || selected.history.length" class="defect-detail__history"><summary>메모·변경 이력 {{ selected.notes.length + selected.history.length }}건</summary><ul><li v-for="item in [...selected.history, ...selected.notes].sort((a,b) => b.createdAt.localeCompare(a.createdAt))" :key="item.id"><span>{{ formatKoreanDateTime(item.createdAt) }} · {{ item.author }}</span><p>{{ 'description' in item ? item.description : item.text }}</p></li></ul></details>
-        <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="busyId === selected.id || selected.status === 'resolved'" @click="rerun(selected)">연결 테스트 재실행</button><span class="scenario-spacer"></span><button v-if="selected.status === 'revalidation_requested'" type="button" class="scenario-button" :disabled="busyId === selected.id" @click="saveDefect(selected, 'resolved')">해결 처리</button><button type="button" class="scenario-button scenario-button--primary" :disabled="busyId === selected.id" @click="saveDefect(selected)">{{ busyId === selected.id ? '저장 중…' : '변경 저장' }}</button></div>
+        <div v-if="!selected.uiAuditId" class="scenario-actions"><button type="button" class="scenario-button" :disabled="busyId === selected.id || selected.status === 'resolved'" @click="rerun(selected)">연결 테스트 재실행</button><span class="scenario-spacer"></span><button v-if="selected.status === 'revalidation_requested'" type="button" class="scenario-button" :disabled="busyId === selected.id" @click="saveDefect(selected, 'resolved')">해결 처리</button><button type="button" class="scenario-button scenario-button--primary" :disabled="busyId === selected.id" @click="saveDefect(selected)">{{ busyId === selected.id ? '저장 중…' : '변경 저장' }}</button></div>
+        <p v-else class="notice">UI QA 결함의 상태 변경은 원본 UI QA 결과에서 관리합니다.</p>
       </aside>
     </div>
   </div>

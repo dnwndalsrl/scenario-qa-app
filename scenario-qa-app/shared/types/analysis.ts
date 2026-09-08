@@ -164,6 +164,7 @@ export interface QaDefect {
   title: string; description: string; status: QaDefectStatus; severity: QaDefectSeverity; priority: QaDefectPriority; assignee: string;
   failureSummary: string; failedStepOrders: number[]; screenshotArtifactIds: string[]; notes: QaDefectNote[]; history: QaDefectHistoryEntry[];
   createdAt: string; updatedAt: string;
+  uiAuditId?: string; uiAuditRule?: string;
 }
 export interface PageDetail { page: CrawledPage; snapshot?: PageSnapshot; pageAnalysis?: AiPageAnalysis; generatedTests: GeneratedTestScenario[]; testRuns: AutomatedTestRun[]; }
 export interface AnalysisDetail {
