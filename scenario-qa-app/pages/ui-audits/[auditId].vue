@@ -25,8 +25,7 @@ const visibleIssueGroups = computed(() => issueGroups.value.filter((group) =>
 const reviewLabels: Record<UiAuditReviewStatus, string> = { unreviewed: "미검토", fix_required: "수정 필요", false_positive: "오탐", deferred: "보류" };
 const reviewCounts = computed(() => countUiAuditReviews(issueGroups.value.map((group) => group.rule), data.value?.audit.reviews || []));
 const reviewDrafts = reactive<Partial<Record<UiAuditRule, { status: UiAuditReviewStatus; note: string }>>>({});
-const savingRule = ref<UiAuditRule>();
-const reviewMessage = ref("");
+const reviewFeedback = reactive<Partial<Record<UiAuditRule, "idle" | "saving" | "success" | "error">>>({});
 const exportMessage = ref("");
 const exporting = ref(false);
 const defectDrafts = reactive<Partial<Record<UiAuditRule, { open: boolean; title: string; severity: QaDefectSeverity; note: string }>>>({});
@@ -43,15 +42,20 @@ watch(issueGroups, (groups) => {
 const saveReview = async (rule: UiAuditRule) => {
   const draft = reviewDrafts[rule];
   if (!draft) return;
-  savingRule.value = rule; reviewMessage.value = "";
+  reviewFeedback[rule] = "saving";
   try {
     const response = await $api<{ review: UiAudit["reviews"][number] }>(`/api/ui-audits/${route.params.auditId}/reviews`, { method: "PUT", body: { rule, ...draft } });
     const reviews = data.value?.audit.reviews || [];
     if (data.value) data.value.audit.reviews = [...reviews.filter((review) => review.rule !== rule), response.review];
-    reviewMessage.value = "판정을 저장했습니다.";
-  } catch { reviewMessage.value = "판정을 저장하지 못했습니다."; }
-  finally { savingRule.value = undefined; }
+    reviewFeedback[rule] = "success";
+  } catch { reviewFeedback[rule] = "error"; }
 };
+const clearReviewFeedback = (rule: UiAuditRule) => { reviewFeedback[rule] = "idle"; };
+const reviewFeedbackMessage = (rule: UiAuditRule) => reviewFeedback[rule] === "success"
+  ? "판정을 저장했습니다."
+  : reviewFeedback[rule] === "error"
+    ? "판정을 저장하지 못했습니다."
+    : "";
 const createDefect = async (rule: UiAuditRule) => {
   const draft = defectDrafts[rule];
   if (!draft) return;
@@ -180,7 +184,6 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
           </div>
           <div class="ui-review-summary">
             <span v-for="(label,status) in reviewLabels" :key="status"><strong>{{ reviewCounts[status] }}</strong>{{ label }}</span>
-            <p v-if="reviewMessage" aria-live="polite">{{ reviewMessage }}</p>
             <p v-if="defectMessage" aria-live="polite">{{ defectMessage }}</p>
           </div>
           <div v-if="visibleIssueGroups.length" class="ui-remediation__groups">
@@ -208,14 +211,17 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
               </details>
               <div v-if="reviewDrafts[group.rule]" class="ui-remediation-review">
                 <label>판정
-                  <select v-model="reviewDrafts[group.rule]!.status">
+                  <select v-model="reviewDrafts[group.rule]!.status" @change="clearReviewFeedback(group.rule)">
                     <option v-for="(label,status) in reviewLabels" :key="status" :value="status">{{ label }}</option>
                   </select>
                 </label>
                 <label>메모
-                  <textarea v-model="reviewDrafts[group.rule]!.note" maxlength="1000" rows="2" placeholder="판정 근거를 선택적으로 입력하세요." />
+                  <textarea v-model="reviewDrafts[group.rule]!.note" maxlength="1000" rows="2" placeholder="판정 근거를 선택적으로 입력하세요." @input="clearReviewFeedback(group.rule)" />
                 </label>
-                <button type="button" class="secondary-button" :disabled="savingRule === group.rule" @click="saveReview(group.rule)">{{ savingRule === group.rule ? "저장 중" : "저장" }}</button>
+                <div class="ui-remediation-review__actions">
+                  <button type="button" class="secondary-button" :disabled="reviewFeedback[group.rule] === 'saving'" @click="saveReview(group.rule)">{{ reviewFeedback[group.rule] === "saving" ? "저장 중..." : "저장" }}</button>
+                  <p class="ui-remediation-review__status" :class="{ 'is-success': reviewFeedback[group.rule] === 'success', 'is-error': reviewFeedback[group.rule] === 'error' }" role="status" aria-live="polite">{{ reviewFeedbackMessage(group.rule) || "\u00a0" }}</p>
+                </div>
               </div>
               <div v-if="uiAuditReviewStatusFor(data.audit.reviews, group.rule) === 'fix_required'" class="ui-defect-registration">
                 <NuxtLink v-if="data.audit.reviews.find(item => item.rule === group.rule)?.defectId" class="secondary-button" :to="`/defects?defect=${data.audit.reviews.find(item => item.rule === group.rule)?.defectId}`">결함 등록됨 · 상세 보기</NuxtLink>

@@ -486,6 +486,10 @@ h3 { margin: 0; font-size: 17px; }
 .ui-remediation-review select,.ui-remediation-review textarea { width:100%; border:1px solid #cdd7e4; border-radius:8px; background:#fff; color:var(--ink); font:inherit; }
 .ui-remediation-review select { min-height:36px; padding:0 9px; }
 .ui-remediation-review textarea { min-height:56px; padding:9px; resize:vertical; }
+.ui-remediation-review__actions { display:grid; gap:5px; }
+.ui-remediation-review__status { min-height:16px; margin:0; color:var(--muted); font-size:10px; line-height:1.6; }
+.ui-remediation-review__status.is-success { color:var(--safe); }
+.ui-remediation-review__status.is-error { color:var(--danger); }
 @media (max-width:760px) {
   .ui-remediation__head { flex-direction:column; }
   .ui-remediation__filters { align-items:stretch; flex-direction:column; }
