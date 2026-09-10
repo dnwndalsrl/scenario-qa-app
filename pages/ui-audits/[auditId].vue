@@ -13,6 +13,7 @@ const comparisonLabel = computed(() => ({matched:"유사",review:"검토 필요"
 const initialArtifact = computed(() => data.value?.audit.artifacts.find((artifact) => artifact.state === "initial"));
 const diffArtifact = computed(() => data.value?.audit.artifacts.find((artifact) => artifact.state === "design_diff"));
 const pageArtifacts = computed(() => data.value?.audit.artifacts.filter((artifact) => artifact.state !== "design_diff") || []);
+const artifactForState = (state: string) => pageArtifacts.value.find((artifact) => artifact.state === state && artifact.signedUrl);
 const severityFilter = ref<"all" | UiAuditSeverity>("all");
 const ruleFilter = ref<"all" | UiAuditRule>("all");
 const reviewFilter = ref<"all" | UiAuditReviewStatus>("all");
@@ -28,6 +29,7 @@ const reviewDrafts = reactive<Partial<Record<UiAuditRule, { status: UiAuditRevie
 const reviewFeedback = reactive<Partial<Record<UiAuditRule, "idle" | "saving" | "success" | "error">>>({});
 const exportMessage = ref("");
 const exporting = ref(false);
+const refreshing = ref(false);
 const defectDrafts = reactive<Partial<Record<UiAuditRule, { open: boolean; title: string; severity: QaDefectSeverity; note: string }>>>({});
 const creatingDefect = ref<UiAuditRule>();
 const defectMessage = ref("");
@@ -84,12 +86,21 @@ const downloadWorkbook = async () => {
 };
 const severityLabel = (severity: UiAuditSeverity) => ({ high: "높음", medium: "보통", low: "낮음" }[severity]);
 const priorityLabel = (severity: UiAuditSeverity) => ({ high: "우선 수정", medium: "다음 수정", low: "개선 권장" }[severity]);
+const refreshAudit = async () => {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try { await refresh(); }
+  finally { refreshing.value = false; }
+};
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let pollCount = 0;
 const pollUntilFinished = async () => {
   if (!data.value || !["queued", "running"].includes(data.value.audit.status) || pollCount >= 100) return;
   pollCount += 1;
-  await refresh();
+  try {
+    const response = await $fetch<{ audit: UiAudit }>(`/api/ui-audits/${route.params.auditId}`);
+    data.value = response;
+  } catch { /* 다음 자동 조회에서 다시 확인합니다. */ }
   if (["queued", "running"].includes(data.value?.audit.status || "")) pollTimer = setTimeout(pollUntilFinished, 3000);
 };
 onMounted(() => { if (["queued", "running"].includes(data.value?.audit.status || "")) pollTimer = setTimeout(pollUntilFinished, 3000); });
@@ -104,7 +115,10 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
         <div><p class="eyebrow">UI QA · 규칙 점검</p><h1>{{ data.audit.name }}</h1><p>{{ data.audit.targetUrl }}</p></div>
         <div>
           <button v-if="data.audit.status === 'completed'" type="button" class="secondary-button" :disabled="exporting" @click="downloadWorkbook">{{ exporting ? "생성 중" : "엑셀 다운로드" }}</button>
-          <button type="button" class="secondary-button" @click="() => refresh()">상태 새로고침</button>
+          <button type="button" class="secondary-button ui-audit-refresh-button" :disabled="refreshing" :aria-busy="refreshing" @click="refreshAudit">
+            <span class="ui-audit-refresh-button__icon" aria-hidden="true">↻</span>
+            {{ refreshing ? "새로고침 중..." : "상태 새로고침" }}
+          </button>
           <p v-if="exportMessage" class="input-help">{{ exportMessage }}</p>
         </div>
       </div>
@@ -204,6 +218,10 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
                   <article v-for="issue in group.issues" :key="issue.id">
                     <header><strong>{{ issue.title }}</strong><small>{{ stateLabel(issue.state) }}</small></header>
                     <p>{{ issue.message }}</p>
+                    <a v-if="artifactForState(issue.state)?.signedUrl" class="ui-remediation-evidence" :href="artifactForState(issue.state)!.signedUrl" target="_blank" rel="noopener noreferrer">
+                      <img :src="artifactForState(issue.state)!.signedUrl" :alt="`${issue.title} 발견 당시 ${stateLabel(issue.state)} 화면`">
+                      <span><strong>발견 당시 화면</strong><small>{{ stateLabel(issue.state) }} · 새 창에서 크게 보기</small></span>
+                    </a>
                     <code>{{ issue.selector }}</code>
                     <dl><div v-for="(value,key) in issue.actual" :key="key"><dt>{{ key }}</dt><dd>{{ value }}</dd></div></dl>
                   </article>
@@ -240,12 +258,20 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
           <p v-else class="empty">선택한 조건에 해당하는 문제가 없습니다.</p>
         </section>
         <p v-else-if="data.audit.status === 'completed'" class="notice">자동 판정 가능한 UI 규칙 위반을 발견하지 못했습니다.</p>
-        <div v-if="pageArtifacts.length" class="ui-audit-screenshots">
-          <figure v-for="artifact in pageArtifacts" :key="artifact.id">
-            <img v-if="artifact.signedUrl" :src="artifact.signedUrl" :alt="`${stateLabel(artifact.state)} 화면`">
-            <figcaption>{{ stateLabel(artifact.state) }} · {{ artifact.width }}×{{ artifact.height }}</figcaption>
-          </figure>
-        </div>
+        <section v-if="pageArtifacts.length" class="ui-audit-captures" aria-labelledby="ui-audit-captures-title">
+          <header>
+            <div><span>화면 기록</span><h3 id="ui-audit-captures-title">점검 과정에서 수집한 전체 화면</h3></div>
+            <p>페이지를 단계별로 스크롤하며 검사한 화면입니다. 각 문제의 상세 영역에서도 관련 화면을 확인할 수 있습니다.</p>
+          </header>
+          <div class="ui-audit-screenshots">
+            <figure v-for="artifact in pageArtifacts" :key="artifact.id">
+              <a v-if="artifact.signedUrl" :href="artifact.signedUrl" target="_blank" rel="noopener noreferrer">
+                <img :src="artifact.signedUrl" :alt="`${stateLabel(artifact.state)} 전체 화면`">
+              </a>
+              <figcaption><strong>{{ stateLabel(artifact.state) }}</strong><span>{{ artifact.width }}×{{ artifact.height }} · 크게 보기</span></figcaption>
+            </figure>
+          </div>
+        </section>
         <figure v-if="data.audit.reference?.signedUrl && !comparison" class="design-reference-preview">
           <img :src="data.audit.reference.signedUrl" :alt="`${data.audit.reference.fileName} 디자인 원본`">
           <figcaption>디자인 원본 · {{ data.audit.reference.fileName }} · {{ data.audit.reference.width }}×{{ data.audit.reference.height }}</figcaption>
