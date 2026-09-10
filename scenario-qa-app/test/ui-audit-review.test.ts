@@ -23,7 +23,7 @@ describe("UI audit review summaries", () => {
     expect(pageSource).toContain('Record<UiAuditRule, "idle" | "saving" | "success" | "error">');
     expect(pageSource).toContain('reviewFeedback[rule] = "success"');
     expect(pageSource).toContain('reviewFeedback[rule] = "error"');
-    expect(pageSource).toContain('@change="clearReviewFeedback(group.rule)"');
+    expect(pageSource).toContain('@input="clearReviewFeedback(group.rule)"');
     expect(pageSource).toContain('@input="clearReviewFeedback(group.rule)"');
   });
 
@@ -36,4 +36,22 @@ describe("UI audit review summaries", () => {
     expect(pageSource).toContain('uiAuditReviewStatusFor(data.audit.reviews, group.rule) === \'fix_required\'');
     expect(styles).toContain('.ui-remediation-review__status { min-height:16px;');
   });
+
+  it("keeps automatic status polling quiet and styles manual refresh feedback", () => {
+    expect(pageSource).toContain('const response = await $fetch<{ audit: UiAudit }>');
+    expect(pageSource).toContain('@click="refreshAudit"');
+    expect(pageSource).toContain(':aria-busy="refreshing"');
+    expect(pageSource).toContain('"새로고침 중..."');
+    expect(styles).toContain('.ui-audit-refresh-button {');
+  });
+
+  it("connects each issue to its captured screen and explains the capture gallery", () => {
+    expect(pageSource).toContain('artifactForState(issue.state)');
+    expect(pageSource).toContain('class="ui-remediation-evidence"');
+    expect(pageSource).toContain('발견 당시 화면');
+    expect(pageSource).toContain('점검 과정에서 수집한 전체 화면');
+    expect(styles).toContain('.ui-remediation-evidence {');
+    expect(styles).toContain('.secondary-button {');
+  });
 });
+
