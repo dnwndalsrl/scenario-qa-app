@@ -113,7 +113,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
     <template v-else-if="data">
       <div class="section-head">
         <div><p class="eyebrow">UI QA · 규칙 점검</p><h1>{{ data.audit.name }}</h1><p>{{ data.audit.targetUrl }}</p></div>
-        <div>
+        <div class="page-actions">
           <button v-if="data.audit.status === 'completed'" type="button" class="secondary-button" :disabled="exporting" @click="downloadWorkbook">{{ exporting ? "생성 중" : "엑셀 다운로드" }}</button>
           <button type="button" class="secondary-button ui-audit-refresh-button" :disabled="refreshing" :aria-busy="refreshing" @click="refreshAudit">
             <span class="ui-audit-refresh-button__icon" aria-hidden="true">↻</span>
@@ -280,4 +280,3 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
     </template>
   </div>
 </template>
-

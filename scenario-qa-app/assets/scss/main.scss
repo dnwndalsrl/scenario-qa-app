@@ -579,7 +579,41 @@ h3 { margin: 0; font-size: 17px; }
   .analysis-form__head { padding:20px 18px; }
   .analysis-mode__switch button { padding:10px 8px; }
 }
+/* Consistent spacing for page headings, actions and evidence controls. */
+.section-head { flex-wrap:wrap; }
+.section-head>div:first-child { min-width:0; flex:1 1 260px; }
+.section-head h1,.section-head p { overflow-wrap:anywhere; }
+.section-head>.primary-button { flex-shrink:0; }
+.page-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.page-actions>p { flex-basis:100%; }
+.status-pill { justify-self:start; align-self:start; width:fit-content; max-width:100%; }
+.ui-remediation__filters { flex-wrap:wrap; }
+.ui-remediation-review>* { min-width:0; }
+.ui-remediation-review__actions { align-self:start; }
+.ui-remediation-review select,.ui-remediation__filters select { min-height:44px; }
+.ui-remediation-group>details>summary { min-height:44px; }
+.ui-audit-screenshots figcaption { flex-wrap:wrap; gap:4px 12px; }
+.ui-defect-registration { padding:16px 18px; border-top:1px solid var(--line); }
+.ui-defect-registration__form { display:grid; gap:16px; }
+.ui-defect-registration__form label { display:grid; min-width:0; gap:8px; font-size:12px; color:var(--muted); }
+.ui-defect-registration__form input,.ui-defect-registration__form select,.ui-defect-registration__form textarea { width:100%; min-width:0; min-height:44px; padding:10px 12px; border:1px solid var(--line-strong); border-radius:8px; background:var(--surface); color:var(--ink); font:inherit; }
+.ui-defect-registration__form>div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.input-block__head { flex-wrap:wrap; gap:4px 12px; }
+.design-upload .document-upload__copy { flex-basis:160px; }
+.topbar .menu-button,.topbar .text-button,.topbar__nav a { min-height:44px; }
+.topbar__nav a { display:flex; align-items:center; }
+@media (max-width:680px) {
+  .section-head { align-items:flex-start; flex-direction:column; gap:16px; }
+  .section-head>div:first-child { flex-basis:auto; width:100%; }
+  .page-actions { width:100%; }
+  .page-actions>button { flex:1 1 140px; }
+  .section-head>.primary-button { width:100%; }
+  .ui-remediation__filters label { min-width:0; flex-wrap:wrap; gap:8px; }
+  .ui-remediation__filters select { min-width:0; width:100%; }
+  .ui-remediation-review__actions { align-self:stretch; }
+  .ui-remediation-review__actions>button { width:100%; }
+  .ui-audit-queued h2 { font-size:20px; overflow-wrap:anywhere; }
+}
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; animation-iteration-count:1!important; }
 }
-
