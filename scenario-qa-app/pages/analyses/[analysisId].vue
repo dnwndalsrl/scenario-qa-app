@@ -18,6 +18,11 @@ const preflightError = ref("");
 const actionError = ref("");
 const realtimeWarning = ref("");
 const { data, refresh, error } = await useFetch<AnalysisDetail>(endpoint, { $fetch: $api });
+interface UsageSummary { dailyUsed: number; dailyLimit: number; active: number; concurrentLimit: number }
+const { data: dashboardData } = await useFetch<{ usage: UsageSummary | null }>("/api/dashboard", { $fetch: $api, default: () => ({ usage: null }) });
+const showRunningView = computed(() => Boolean(data.value)
+  && !isTerminal(data.value!.analysis.status)
+  && !["scenario_review", "document_failed"].includes(data.value!.analysis.processStage || ""));
 
 let channel: RealtimeChannel | undefined;
 let staleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -244,7 +249,15 @@ async function downloadPdfReport() {
 </script>
 
 <template>
-  <div v-if="data">
+  <AnalysisRunningView
+    v-if="data && showRunningView"
+    :analysis="data.analysis"
+    :snapshot="data.snapshot"
+    :usage="dashboardData.usage"
+    :busy="busy"
+    @cancel="cancel"
+  />
+  <div v-else-if="data">
     <header class="report-head">
       <div>
         <h1 class="report-title">분석 보고서</h1>

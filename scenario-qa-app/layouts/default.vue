@@ -16,9 +16,9 @@ async function logout() {
     <header class="topbar">
       <NuxtLink class="brand" to="/" aria-label="Probe QA 홈"><span class="brand__mark">P</span><strong>Probe QA</strong></NuxtLink>
       <nav class="topbar__nav" aria-label="주 메뉴"><NuxtLink to="/">새 분석</NuxtLink><NuxtLink to="/analyses">분석 이력</NuxtLink><NuxtLink to="/defects">결함 관리</NuxtLink><NuxtLink to="/system/status">시스템 상태</NuxtLink></nav>
-      <button class="text-button topbar__account" type="button" @click="logout"><span v-if="session?.user?.email">{{ session.user.email }} · </span>로그아웃</button>
+      <div class="topbar__account"><span v-if="session?.user?.email">{{ session.user.email }}</span><button class="text-button" type="button" @click="logout">로그아웃</button></div>
     </header>
     <main id="main-content" tabindex="-1"><slot /></main>
-    <footer><span>Probe QA</span><i aria-hidden="true">|</i><span>v1.4</span><i aria-hidden="true">|</i><span>이용 안내</span></footer>
+    <footer><span>Probe QA</span><span><b>v1.4 · runner github-actions</b> · 작업당 최대 10분</span></footer>
   </div>
 </template>

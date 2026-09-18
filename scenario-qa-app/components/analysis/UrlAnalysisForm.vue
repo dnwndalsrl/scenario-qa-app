@@ -2,22 +2,14 @@
 import type { AnalysisAuthenticationInput } from "../../shared/types/authentication";
 
 interface SubmitPayload { url: string; document?: File; authentication?: AnalysisAuthenticationInput }
+const props = defineProps<{ loading?: boolean; url: string }>();
 const emit = defineEmits<{ submit: [payload: SubmitPayload] }>();
-defineProps<{ loading?: boolean }>();
-const url = ref("");
 const error = ref("");
 const document = ref<File>();
 const authenticationEnabled = ref(false);
 const loginUrl = ref("");
 const username = ref("");
 const password = ref("");
-const settingsOpen = ref(false);
-
-function openSettings() {
-  error.value = "";
-  try { const target = new URL(url.value.trim()); if (!["http:", "https:"].includes(target.protocol)) throw new Error(); settingsOpen.value = true; }
-  catch { error.value = "http:// 또는 https://로 시작하는 올바른 URL을 입력해 주세요."; }
-}
 
 function selectDocument(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -30,10 +22,11 @@ function selectDocument(event: Event) {
   }
   document.value = file;
 }
+
 function submit() {
   error.value = "";
   let target: URL;
-  try { target = new URL(url.value.trim()); if (!["http:", "https:"].includes(target.protocol)) throw new Error(); }
+  try { target = new URL(props.url.trim()); if (!["http:", "https:"].includes(target.protocol)) throw new Error(); }
   catch { error.value = "http:// 또는 https://로 시작하는 올바른 URL을 입력해 주세요."; return; }
   let authentication: AnalysisAuthenticationInput | undefined;
   if (authenticationEnabled.value) {
@@ -49,32 +42,27 @@ function submit() {
 </script>
 
 <template>
-  <form class="analysis-form card" novalidate @submit.prevent="submit">
-    <div class="url-composer">
-      <div class="url-control"><input id="analysis-url" v-model="url" class="url-input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" :readonly="settingsOpen" data-testid="analysis-url-input"><button v-if="settingsOpen" class="url-change" type="button" @click="settingsOpen = false">URL 변경</button><button v-else class="primary-button" type="button" data-testid="start-analysis-button" @click="openSettings">분석 시작 →</button></div>
-    </div>
-    <div v-if="settingsOpen" class="analysis-targets settings-panel">
-      <header><div><h2>기능 QA 설정</h2><p>선택 문서와 로그인 여부를 확인한 뒤 분석을 실행합니다.</p></div><span>현재 페이지 1개</span></header>
-      <section class="input-block">
-        <div class="input-block__head"><span>기획서·요구사항</span><span>선택 · PDF 10MB 이하</span></div>
-        <label class="document-upload" :class="{ selected: document }" for="requirements-pdf">
-          <span class="document-upload__icon" aria-hidden="true">PDF</span>
-          <span class="document-upload__copy"><strong>{{ document?.name || "요구사항 문서를 함께 분석할까요?" }}</strong><small>{{ document ? "선택한 문서를 페이지 분석에 함께 반영합니다." : "자유 형식 PDF도 가능하며, 문서가 없어도 페이지 분석을 시작할 수 있습니다." }}</small></span>
-          <span class="document-upload__action">{{ document ? "파일 변경" : "PDF 선택" }}</span>
-          <input id="requirements-pdf" type="file" accept="application/pdf,.pdf" @change="selectDocument">
-        </label>
+  <form class="qa-settings" novalidate @submit.prevent="submit">
+    <header><strong>실행 전 설정</strong><span>모두 선택 사항 · 그대로 실행해도 됩니다</span></header>
+    <div class="qa-settings__grid">
+      <section class="qa-option-card">
+        <div class="qa-option-card__title"><strong>기획서·요구사항</strong><span>선택 · PDF 10MB 이하</span></div>
+        <p>있으면 요구사항을 테스트 가능한 조건으로 정리하고, 없으면 페이지 분석만 진행합니다.</p>
+        <div class="qa-file-picker"><label for="requirements-pdf">PDF 선택</label><span>{{ document?.name || "선택한 파일 없음" }}</span><input id="requirements-pdf" type="file" accept="application/pdf,.pdf" @change="selectDocument"></div>
       </section>
-      <section class="input-block authentication-block">
-        <label class="authentication-toggle"><input v-model="authenticationEnabled" type="checkbox"><span><strong>로그인이 필요한 페이지</strong><small>동일 사이트의 일반 아이디·비밀번호 로그인만 지원합니다.</small></span><b>{{ authenticationEnabled ? "사용" : "사용 안 함" }}</b></label>
-        <div v-if="authenticationEnabled" class="authentication-fields">
-          <label><span>로그인 페이지 URL</span><input v-model="loginUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/login" required></label>
-          <label><span>테스트 계정 아이디·이메일</span><input v-model="username" type="text" autocomplete="username" placeholder="qa@example.com" required></label>
-          <label><span>테스트 계정 비밀번호</span><input v-model="password" type="password" autocomplete="current-password" placeholder="비밀번호 입력" required></label>
-          <p><span aria-hidden="true">🔒</span> 계정 정보는 암호화해 저장하며 화면·보고서·로그에 표시하지 않습니다. 소셜 로그인, OTP, CAPTCHA는 지원하지 않습니다.</p>
-        </div>
+      <section class="qa-option-card">
+        <div class="qa-option-card__title"><strong>로그인이 필요한 페이지</strong><span>선택 · 아이디·비밀번호만</span></div>
+        <p>동일 사이트의 일반 로그인만 지원합니다. 소셜·2단계 인증은 지원하지 않습니다.</p>
+        <label class="qa-check"><input v-model="authenticationEnabled" type="checkbox">로그인 후 분석</label>
       </section>
-      <footer class="settings-submit"><span>문서 분석 → 페이지 분석 → 시나리오 생성</span><button class="primary-button" type="submit" :disabled="loading">{{ loading ? "분석 준비 중" : "분석 실행" }}</button></footer>
+      <div v-if="authenticationEnabled" class="qa-auth-fields">
+        <label><span>로그인 페이지 URL</span><input v-model="loginUrl" type="url" autocomplete="url" placeholder="https://example.com/login"></label>
+        <label><span>테스트 계정 아이디·이메일</span><input v-model="username" type="text" autocomplete="username" placeholder="qa@example.com"></label>
+        <label><span>테스트 계정 비밀번호</span><input v-model="password" type="password" autocomplete="current-password" placeholder="비밀번호 입력"></label>
+        <p>계정 정보는 암호화해 저장하며 화면·보고서·로그에 표시하지 않습니다.</p>
+      </div>
     </div>
+    <footer class="qa-settings__submit"><div><strong>기능 QA · {{ document ? '문서 선택' : '문서 없음' }} · {{ authenticationEnabled ? '로그인 사용' : '로그인 없음' }}</strong><span>1 선택 문서 분석 → 2 페이지·시나리오 분석 → 3 확정 시나리오 실행</span></div><button class="primary-button" type="submit" :disabled="loading">{{ loading ? "분석 준비 중" : "분석 실행" }}</button></footer>
     <p v-if="error" class="error-box" role="alert">{{ error }}</p>
   </form>
 </template>
