@@ -10,10 +10,16 @@ describe("Badge 레이아웃", () => {
     expect(styles).toMatch(/\.test-card__head\s*\{[^}]*align-items:\s*flex-start/);
   });
 
-  it("홈 소개와 분석 입력 영역을 전체 너비의 세로 목록으로 표시한다", () => {
-    expect(styles).toMatch(/\.hero\s*\{[^}]*grid-template-columns:\s*1fr/);
-    expect(styles).toMatch(/\.hero-copy\s*\{[^}]*width:\s*100%/);
-    expect(styles).toMatch(/\.analysis-mode\s*\{[^}]*width:\s*100%/);
+  it("1440px 레퍼런스 레이아웃을 유지하고 작은 화면에서는 가로 스크롤한다", () => {
+    expect(styles).toMatch(/html\s*\{[^}]*min-width:\s*1440px[^}]*overflow-x:\s*auto/);
+    expect(styles).toMatch(/\.app-shell\s*\{[^}]*min-width:\s*1440px/);
+  });
+
+  it("레퍼런스의 로컬 폰트와 단색 토큰을 사용한다", () => {
+    expect(styles).toContain("Pretendard-Regular.woff2");
+    expect(styles).toContain("jetbrains-mono-latin-400-normal.woff2");
+    expect(styles).toContain("--ink:#0a0a0a");
+    expect(styles).toContain("--bg:#fff");
   });
 
   it("키보드 탐색과 모션 축소 환경을 지원한다", () => {
@@ -23,6 +29,7 @@ describe("Badge 레이아웃", () => {
   });
 
   it("로그인 입력란에 명시적인 레이블을 연결한다", () => {
+    expect(login).toContain("<form novalidate");
     expect(login).toContain('for="login-email"');
     expect(login).toContain('id="login-email"');
     expect(login).toContain('for="login-password"');
@@ -36,4 +43,3 @@ describe("Badge 레이아웃", () => {
     expect(login).not.toContain("qa-admin@scenario-qa.app");
   });
 });
-

@@ -11,6 +11,13 @@ const authenticationEnabled = ref(false);
 const loginUrl = ref("");
 const username = ref("");
 const password = ref("");
+const settingsOpen = ref(false);
+
+function openSettings() {
+  error.value = "";
+  try { const target = new URL(url.value.trim()); if (!["http:", "https:"].includes(target.protocol)) throw new Error(); settingsOpen.value = true; }
+  catch { error.value = "http:// 또는 https://로 시작하는 올바른 URL을 입력해 주세요."; }
+}
 
 function selectDocument(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -42,16 +49,12 @@ function submit() {
 </script>
 
 <template>
-  <form class="analysis-form card" @submit.prevent="submit">
-    <header class="analysis-form__head">
-      <div><span>새 분석</span><h2>분석할 대상을 등록하세요</h2><p>URL은 필수이며, 기획 문서는 필요한 경우에만 첨부하면 됩니다.</p></div>
-      <div class="scope-chip"><i aria-hidden="true" />현재 페이지 1개</div>
-    </header>
-    <div class="analysis-targets">
-      <section class="input-block">
-        <div class="input-block__head"><label for="analysis-url">테스트할 페이지 URL</label><span>필수</span></div>
-        <div class="url-control"><span class="url-control__icon" aria-hidden="true">↗</span><input id="analysis-url" v-model="url" class="url-input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" data-testid="analysis-url-input"><button class="primary-button" type="submit" :disabled="loading" data-testid="start-analysis-button"><span>{{ loading ? "분석을 준비하는 중…" : "분석 시작" }}</span><span aria-hidden="true">→</span></button></div>
-      </section>
+  <form class="analysis-form card" novalidate @submit.prevent="submit">
+    <div class="url-composer">
+      <div class="url-control"><input id="analysis-url" v-model="url" class="url-input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" :readonly="settingsOpen" data-testid="analysis-url-input"><button v-if="settingsOpen" class="url-change" type="button" @click="settingsOpen = false">URL 변경</button><button v-else class="primary-button" type="button" data-testid="start-analysis-button" @click="openSettings">분석 시작 →</button></div>
+    </div>
+    <div v-if="settingsOpen" class="analysis-targets settings-panel">
+      <header><div><h2>기능 QA 설정</h2><p>선택 문서와 로그인 여부를 확인한 뒤 분석을 실행합니다.</p></div><span>현재 페이지 1개</span></header>
       <section class="input-block">
         <div class="input-block__head"><span>기획서·요구사항</span><span>선택 · PDF 10MB 이하</span></div>
         <label class="document-upload" :class="{ selected: document }" for="requirements-pdf">
@@ -70,6 +73,7 @@ function submit() {
           <p><span aria-hidden="true">🔒</span> 계정 정보는 암호화해 저장하며 화면·보고서·로그에 표시하지 않습니다. 소셜 로그인, OTP, CAPTCHA는 지원하지 않습니다.</p>
         </div>
       </section>
+      <footer class="settings-submit"><span>문서 분석 → 페이지 분석 → 시나리오 생성</span><button class="primary-button" type="submit" :disabled="loading">{{ loading ? "분석 준비 중" : "분석 실행" }}</button></footer>
     </div>
     <p v-if="error" class="error-box" role="alert">{{ error }}</p>
   </form>

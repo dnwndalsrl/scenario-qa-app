@@ -95,3 +95,22 @@ Apply these rules whenever the user asks to deploy this project. They are the de
 - Never print or store authentication tokens in the workspace.
 - Correctness and security take priority over token savings. Expand verification for authentication, data migration, payment, destructive operations, or other high-risk changes, and state why.
 - A user's explicit request such as "run the full test suite" overrides the corresponding default above, but all other deployment rules still apply.
+
+---
+
+# AGENTS.md — Probe QA 프론트엔드 작업 규칙
+
+> 이 파일을 리포지토리 루트의 `AGENTS.md`에 병합하세요. Codex는 작업 시작 시 이 파일을 자동으로 읽습니다.
+
+## 디자인 (UI를 만들거나 바꾸는 모든 작업에 적용)
+
+- UI 작업 전 **`design/DESIGN.md`를 반드시 먼저 읽고** 그 규칙 안에서만 작업한다. 색·타이포·라운드·간격은 `design/tokens.css`의 변수만 사용한다. 새 값을 만들지 않는다.
+- 새 화면·컴포넌트는 `design/screens/`에서 가장 비슷한 레퍼런스 HTML을 열어 구조와 값을 그대로 가져온 뒤 내용만 바꾼다. 레퍼런스에 없는 패턴이 필요하면 만들기 전에 사용자에게 확인한다.
+- 상태(성공/실패/진행/대기)는 색이 아니라 `DESIGN.md §5`의 글리프 + 굵기로 표기한다. 유채색은 어디에도 쓰지 않는다.
+- 한 화면에 primary(검정 채움) 버튼은 1개. 새로고침·다운로드·재실행·초기화는 secondary 또는 텍스트 링크.
+- JetBrains Mono는 라틴·숫자만으로 된 문자열(URL, ID, 타임스탬프, 에러 메시지)에만. 한글이 포함된 텍스트는 Pretendard.
+- 버튼·링크 라벨은 `DESIGN.md §7-1` 표의 것만 쓴다. 폼 오류는 브라우저 기본 툴팁 대신 `§6-C` 검증 패턴(필드 아래 ✕ 메시지 / 버튼 아래 배너)으로 표기한다.
+- 폰트는 `design/fonts/`의 파일을 `@font-face`로 로드한다. 외부 CDN 사용 금지.
+- 표는 CSS grid(고정폭 열 + 1fr 1개), 셀 텍스트는 `nowrap + ellipsis`, 헤더와 셀의 x 시작점을 맞춘다. 행 링크 안에 링크를 중첩하지 않는다.
+- UI 변경 후에는 1440×900 뷰포트에서 렌더링해 `DESIGN.md §8-5` 체크리스트를 확인하고, 스크린샷을 PR에 첨부한다.
+- 디자인 판단이 필요한 지점(무엇을 숨길지, 무엇을 강조할지, 새 상태의 표기)은 임의로 결정하지 말고 질문으로 남긴다.

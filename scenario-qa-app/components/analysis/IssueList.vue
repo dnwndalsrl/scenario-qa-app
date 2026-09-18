@@ -196,13 +196,5 @@ function formatDate(value: string): string {
 .issue-card__detail-grid strong { display: block; margin-bottom: 7px; font-size: 12px; }
 .issue-card__detail-grid p, .issue-card__detail-grid ul { margin: 0; color: #526176; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .issue-card__detail-grid ul { padding-left: 17px; }
-@media (max-width: 720px) {
-  .issue-section-head, .issue-group__head { align-items: flex-start; }
-  .issue-section-head { gap: 14px; }
-  .issue-overview { width: 100%; }
-  .issue-overview span { flex: 1; }
-  .issue-filters { padding: 16px 18px 0; }
-  .issue-groups { padding: 20px 18px 22px; }
-  .issue-card__detail-grid { grid-template-columns: 1fr; }
-}
+
 </style>

@@ -1,0 +1,54 @@
+/* Probe QA — design tokens (monotone). Single source of truth; do not add colors outside this file. */
+:root {
+  /* color */
+  --ink: #0a0a0a;          /* primary text, primary button fill, active glyphs */
+  --text-2: #525252;       /* secondary text (descriptions, table body) */
+  --text-3: #737373;       /* tertiary text (labels, inactive nav, meta) */
+  --text-4: #a3a3a3;       /* placeholder, disabled, footer */
+  --surface: #fafafa;      /* filled cards, table wrapper, panels */
+  --surface-2: #f5f5f5;    /* segmented control track, active nav pill */
+  --border: #e5e5e5;       /* every 1px line */
+  --bg: #ffffff;
+
+  /* type */
+  --font-sans: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;   /* latin/digits only — never Hangul */
+  --fs-h1-focus: 32px;  --lh-h1-focus: 40px;   /* centered focus pages (새 분석 flow) */
+  --fs-h1: 24px;        --lh-h1: 32px;         /* work pages */
+  --fs-h2: 18px;        --lh-h2: 26px;         /* report sections */
+  --fs-h3: 16px;        --lh-h3: 24px;
+  --fs-body: 14px;      --lh-body: 21px;
+  --fs-small: 13px;     --lh-small: 19px;
+  --fs-meta: 12px;      --lh-meta: 18px;
+  --fs-kpi: 32px;       --lh-kpi: 38px;        /* big numbers in KPI strip */
+  --fs-kpi-sm: 28px;    --lh-kpi-sm: 34px;     /* inline KPI on list pages */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600;   /* nothing above 600 */
+
+  /* radius */
+  --r-pill: 999px;   /* buttons, nav items, segmented tabs, filter pills, select/search inputs */
+  --r-card: 12px;    /* filled cards, table wrapper, panels */
+  --r-composer: 14px;/* the URL composer + settings panel */
+  --r-inner: 10px;   /* cards inside a panel */
+  --r-field: 8px;    /* text inputs / selects inside cards */
+  --r-mark: 6px;     /* brand mark only */
+
+  /* spacing */
+  --page-x: 120px;         /* horizontal page padding at 1440 → 1200px content */
+  --page-top: 32px;        /* work pages */
+  --focus-top: 148px;      /* entry page, above the h1 */
+  --focus-top-2: 96px;     /* settings / running pages */
+  --focus-w: 720px;        /* composer + panel width */
+  --section-gap: 24px;     /* between blocks on work pages */
+  --report-gap: 32px;      /* between report sections (plus 1px top border) */
+  --card-pad: 24px;
+  --panel-pad: 20px;
+  --inner-card-pad: 16px;
+  --table-cell-y: 12px; --table-cell-x: 16px; --table-row-inset: 12px;
+  --field-gap: 12px;       /* between cards in a settings panel */
+  --label-gap: 6px;        /* label → control */
+
+  /* control sizes */
+  --h-nav: 56px; --h-footer: 48px;
+  --h-btn: 36px; --h-btn-lg: 40px; --h-btn-sm: 32px;
+  --h-input: 36px; --h-input-sm: 32px;
+}

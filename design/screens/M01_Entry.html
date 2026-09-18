@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>새 분석 – 진입</title>
+
+</head>
+<body style="background:#f5f5f5;display:flex;justify-content:center;padding:0;margin:0;">
+
+
+<style>
+@font-face{font-family:'JetBrains Mono';font-weight:400;src:url(../fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-weight:500;src:url(../fonts/jetbrains-mono-latin-500-normal.woff2) format('woff2')}
+</style>
+<style>
+@font-face{font-family:"Pretendard";font-weight:400;font-style:normal;font-display:swap;src:url(../fonts/Pretendard-Regular.woff2) format("woff2")}
+@font-face{font-family:"Pretendard";font-weight:500;font-style:normal;font-display:swap;src:url(../fonts/Pretendard-Medium.woff2) format("woff2")}
+@font-face{font-family:"Pretendard";font-weight:600;font-style:normal;font-display:swap;src:url(../fonts/Pretendard-SemiBold.woff2) format("woff2")}
+body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#ffffff;color:#0a0a0a;-webkit-font-smoothing:antialiased}
+a{color:#0a0a0a;text-decoration:none}a:hover{color:#525252}
+input::placeholder{color:#a3a3a3}
+</style>
+
+<div style="position: relative; width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #ffffff; font-size: 14px; line-height: 1.5; color: #0a0a0a;">
+<header style="height: 56px; box-sizing: border-box; padding: 0 120px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; border-bottom: 1px solid #e5e5e5;">
+    <a href="M01_Entry.html" style="display: flex; align-items: center; gap: 10px;">
+      <span style="width: 24px; height: 24px; border-radius: 6px; background: #0a0a0a; color: #ffffff; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center;">P</span>
+      <span style="font-size: 14px; font-weight: 600; color: #0a0a0a;">Probe QA</span>
+    </a>
+    <nav style="display: flex; align-items: center; gap: 4px;"><a href="M01_Entry.html" style="padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 500; background: #f5f5f5; color: #0a0a0a;">새 분석</a><a href="M05_History.html" style="padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 500; color: #737373;">분석 이력</a><a href="M10_Defects.html" style="padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 500; color: #737373;">결함 관리</a><a href="M11_Status.html" style="padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 500; color: #737373;">시스템 상태</a></nav>
+    <div style="display: flex; align-items: center; gap: 12px; font-size: 13px; color: #737373;">
+      <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12px;">qa-admin@scenario-qa.app</span>
+      <a href="#" style="color: #737373; font-weight: 500;">로그아웃</a>
+    </div>
+  </header><main style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding-top: 148px; box-sizing: border-box;">
+    <h1 style="margin: 0 0 28px; font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -0.02em; color: #0a0a0a; text-align: center;">어떤 페이지를 검증할까요?</h1>
+    <div style="width: 720px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="box-sizing: border-box; border: 1px solid #e5e5e5; border-radius: 14px; background: #ffffff; padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 12px;">
+        <label for="url" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">테스트할 페이지 URL</label><input id="url" type="url" placeholder="https://example.com" style="width: 100%; box-sizing: border-box; border: 0; outline: none; padding: 0; background: transparent; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 15px; color: #0a0a0a;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div role="tablist" style="display: flex; gap: 2px; padding: 2px; background: #f5f5f5; border-radius: 999px;"><a href="M01_Entry.html" role="tab" aria-selected="true" style="padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; background: #ffffff; color: #0a0a0a; border: 1px solid #e5e5e5;">기능 QA</a><a href="M01_Entry.html" role="tab" aria-selected="false" style="padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; color: #737373; border: 1px solid transparent;">UI 점검</a></div>
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="font-size: 12px; color: #a3a3a3;">0/20 오늘 · 0/1 실행 중</span><a href="M02_SettingsFn.html" style="display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: #0a0a0a; color: #ffffff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;">분석 시작 →</a></div>
+        </div>
+      </div>
+      <p style="margin: 0; text-align: center; font-size: 13px; color: #a3a3a3;">입력한 URL의 현재 페이지 한 곳만 분석합니다. 결제·삭제·계정 변경 등 위험 동작은 자동 실행하지 않습니다.</p>
+    </div>
+    <div style="width: 720px; margin-top: 56px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 13px; font-weight: 500; color: #737373;">최근 분석</span><a href="M05_History.html" style="font-size: 13px; color: #737373;">전체 이력 →</a></div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <a href="M06_ReportPending.html" style="display: flex; flex-direction: column; gap: 6px; padding: 16px; background: #fafafa; border-radius: 12px;"><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 500; color: #0a0a0a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">ecredit.co.kr</span><span style="font-size: 13px; color: #525252;">2단계 완료 · 시나리오 확정 대기</span><span style="font-size: 12px; color: #a3a3a3;">9. 2. 오후 3:05</span></a>
+        <a href="M07_ReportDone.html" style="display: flex; flex-direction: column; gap: 6px; padding: 16px; background: #fafafa; border-radius: 12px;"><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 500; color: #0a0a0a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">doctor-ag.com</span><span style="font-size: 13px; color: #525252;">3단계 완료 · 10/10 성공</span><span style="font-size: 12px; color: #a3a3a3;">8. 21. 오전 9:34 · 13회</span></a>
+        <a href="M08_ReportFailed.html" style="display: flex; flex-direction: column; gap: 6px; padding: 16px; background: #fafafa; border-radius: 12px;"><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 500; color: #0a0a0a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">hanwhaocean.com</span><span style="font-size: 13px; color: #525252;">3단계 완료 · 실행 오류 7건</span><span style="font-size: 12px; color: #a3a3a3;">8. 12. 오후 4:10</span></a>
+      </div>
+    </div></main><footer style="height: 48px; box-sizing: border-box; padding: 0 120px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #a3a3a3; flex-shrink: 0;"><span style="font-weight: 500;">Probe QA</span><span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;">v1.4 · runner github-actions</span> · 작업당 최대 10분</span></footer>
+</div>
+
+
+</body>
+</html>

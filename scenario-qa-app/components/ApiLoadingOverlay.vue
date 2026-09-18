@@ -17,10 +17,11 @@ const { isLoading } = useApiLoading();
 </template>
 
 <style scoped>
-.api-loading-overlay{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:rgba(244,247,251,.82);backdrop-filter:blur(5px)}
-.api-loading-card{display:grid;justify-items:center;gap:8px;min-width:260px;padding:28px;border:1px solid var(--line);border-radius:20px;background:white;box-shadow:0 24px 70px rgba(32,49,79,.18);color:var(--ink)}
-.api-loading-card>span:last-child{color:var(--muted);font-size:13px}
-.api-loading-spinner{width:38px;height:38px;margin-bottom:6px;border:4px solid #e0e7ff;border-top-color:var(--brand);border-radius:50%;animation:api-spin .75s linear infinite}
+.api-loading-overlay{position:fixed;inset:0;z-index:9999;display:grid;min-width:1440px;place-items:center;background:rgba(255,255,255,.6)}
+.api-loading-card{display:grid;width:280px;justify-items:center;gap:8px;padding:28px 24px 24px;border:1px solid var(--border);border-radius:var(--r-composer);background:var(--bg);color:var(--ink)}
+.api-loading-card strong{font-size:var(--fs-body);font-weight:var(--fw-semibold)}
+.api-loading-card>span:last-child{color:var(--text-2);font-size:var(--fs-small)}
+.api-loading-spinner{width:28px;height:28px;margin-bottom:6px;border:2.5px solid var(--border);border-top-color:var(--ink);border-radius:50%;animation:api-spin .9s linear infinite}
 .api-loading-enter-active,.api-loading-leave-active{transition:opacity .15s ease}.api-loading-enter-from,.api-loading-leave-to{opacity:0}
 @keyframes api-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.api-loading-spinner{animation-duration:1.5s}.api-loading-enter-active,.api-loading-leave-active{transition:none}}

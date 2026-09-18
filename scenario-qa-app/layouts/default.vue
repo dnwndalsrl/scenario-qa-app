@@ -3,11 +3,22 @@ import { useAuthSession } from "~/composables/useAuthSession";
 
 const session = useAuthSession();
 const { $api } = useNuxtApp();
-const route = useRoute();
-const menuOpen = ref(false);
-watch(() => route.fullPath, () => { menuOpen.value = false; });
-async function logout(){ await $api("/api/auth/logout", { method: "POST" }); session.value = { authenticated: false, user: null }; await navigateTo("/login"); }
+async function logout() {
+  await $api("/api/auth/logout", { method: "POST" });
+  session.value = { authenticated: false, user: null };
+  await navigateTo("/login");
+}
 </script>
-<template><div class="app-shell"><a class="skip-link" href="#main-content">본문으로 건너뛰기</a><header class="topbar"><NuxtLink class="brand" to="/" aria-label="Probe QA 홈"><span class="brand__mark">P</span><span><strong>Probe QA</strong><small>Quality operations</small></span></NuxtLink><nav id="main-navigation" class="topbar__nav" :class="{ 'is-open': menuOpen }" aria-label="주 메뉴"><NuxtLink to="/">새 분석</NuxtLink><NuxtLink to="/analyses">분석 이력</NuxtLink><NuxtLink to="/defects">결함 관리</NuxtLink><NuxtLink to="/system/status">시스템 상태</NuxtLink></nav><button class="menu-button" type="button" :aria-expanded="menuOpen" aria-controls="main-navigation" @click="menuOpen = !menuOpen"><span aria-hidden="true">{{ menuOpen ? '×' : '☰' }}</span><span>메뉴</span></button><button class="text-button" type="button" @click="logout">로그아웃<span v-if="session?.user?.email"> · {{ session.user.email }}</span></button></header><main id="main-content" tabindex="-1"><slot /></main><footer><strong>Probe QA</strong><span>분석부터 검증과 결함 관리까지 하나의 흐름으로 연결합니다.</span></footer></div></template>
-<style scoped>.brand{min-width:0}.brand>span:last-child{min-width:0}.text-button{flex:none;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.menu-button{display:none;flex:none;min-height:38px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);font-size:12px;font-weight:750;cursor:pointer}.menu-button span:first-child{font-size:16px}@media(max-width:860px){.menu-button{display:inline-flex;align-items:center;gap:6px}.topbar__nav{display:none;position:absolute;top:64px;right:18px;z-index:12;width:min(220px,calc(100vw - 36px));max-height:calc(100vh - 84px);overflow-y:auto;padding:8px;border:1px solid var(--line);border-radius:13px;background:#fff;box-shadow:0 14px 36px rgba(32,49,79,.16)}.topbar__nav.is-open{display:grid}.topbar__nav a{padding:11px 12px}.text-button{max-width:92px}.text-button span{display:none}}@media(max-width:460px){.brand small{display:none}.topbar{gap:8px}.text-button{padding:0;max-width:52px}.menu-button{margin-left:auto}}</style>
 
+<template>
+  <div class="app-shell">
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+    <header class="topbar">
+      <NuxtLink class="brand" to="/" aria-label="Probe QA 홈"><span class="brand__mark">P</span><strong>Probe QA</strong></NuxtLink>
+      <nav class="topbar__nav" aria-label="주 메뉴"><NuxtLink to="/">새 분석</NuxtLink><NuxtLink to="/analyses">분석 이력</NuxtLink><NuxtLink to="/defects">결함 관리</NuxtLink><NuxtLink to="/system/status">시스템 상태</NuxtLink></nav>
+      <button class="text-button topbar__account" type="button" @click="logout"><span v-if="session?.user?.email">{{ session.user.email }} · </span>로그아웃</button>
+    </header>
+    <main id="main-content" tabindex="-1"><slot /></main>
+    <footer><span>Probe QA</span><i aria-hidden="true">|</i><span>v1.4</span><i aria-hidden="true">|</i><span>이용 안내</span></footer>
+  </div>
+</template>

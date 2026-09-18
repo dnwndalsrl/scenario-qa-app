@@ -50,6 +50,6 @@ const screenshot = computed(() => props.snapshot.screenshotArtifactId ? `/api/an
 .page-overview__limitations { margin-top:26px; padding-top:24px; border-top:1px solid var(--line); }
 .page-overview__limitations h3 { margin:0 0 12px; font-size:15px; }
 .page-overview__limitations ul { display:grid; gap:8px; margin:0; padding-left:18px; color:var(--muted); font-size:13px; line-height:1.6; }
-@media (max-width:800px) { .page-overview__body { grid-template-columns:1fr; }.page-overview__visual { min-height:360px; border-right:0; border-bottom:1px solid var(--line); } }
-@media (max-width:520px) { .page-overview__head { align-items:flex-start; flex-direction:column; padding:22px; }.page-overview__content { padding:24px 20px; }.page-overview__visual { min-height:280px; padding:16px; }.page-overview__label { top:26px; left:26px; }.page-overview__meta div { grid-template-columns:1fr; gap:5px; } }
+
+
 </style>
