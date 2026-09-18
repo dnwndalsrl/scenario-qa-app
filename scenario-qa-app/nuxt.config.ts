@@ -19,6 +19,8 @@ export default defineNuxtConfig({
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
       signupEnabled: process.env.NUXT_PUBLIC_SIGNUP_ENABLED === "true",
+      reviewerEmail: process.env.NUXT_PUBLIC_REVIEWER_EMAIL ?? "qa-admin@scenario-qa.app",
+      reviewerPassword: process.env.NUXT_PUBLIC_REVIEWER_PASSWORD ?? "",
       appUrl: process.env.NUXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3100"
     }
   },
@@ -36,3 +38,4 @@ export default defineNuxtConfig({
     }
   }
 });
+

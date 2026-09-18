@@ -28,5 +28,12 @@ describe("Badge 레이아웃", () => {
     expect(login).toContain('for="login-password"');
     expect(login).toContain('id="login-password"');
   });
+
+  it("설정된 심사용 계정을 로그인 입력란에 채울 수 있다", () => {
+    expect(login).toContain('v-if="reviewerAccountAvailable"');
+    expect(login).toContain('class="reviewer-account"');
+    expect(login).toContain('@click="fillReviewerAccount"');
+    expect(login).not.toContain("qa-admin@scenario-qa.app");
+  });
 });
 
