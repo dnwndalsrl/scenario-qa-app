@@ -53,6 +53,19 @@ export interface UiAuditReview {
   defectId?: string;
 }
 
+export interface UiAuditHistoryItem {
+  id: string;
+  name: string;
+  targetUrl: string;
+  normalizedUrl: string;
+  status: UiAuditStatus;
+  currentMessage: string;
+  hasReference: boolean;
+  summary?: UiAuditSummary;
+  createdAt: string;
+  completedAt?: string;
+}
+
 export interface UiAudit {
   id: string;
   name: string;
@@ -71,3 +84,4 @@ export interface UiAudit {
   completedAt?: string;
   error?: { code: string; message: string };
 }
+
