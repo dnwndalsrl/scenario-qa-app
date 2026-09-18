@@ -43,9 +43,8 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
 h3 { margin: 0; font-size: 17px; }
 .lead { max-width: 650px; margin: 20px 0 0; color: var(--muted); font-size: 18px; line-height: 1.75; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-sm); }
-.usage-summary { display:flex; flex-wrap:wrap; gap:28px; margin-top:30px; padding-top:22px; border-top:1px solid var(--line); }
-.usage-summary span { display:grid; gap:3px; padding-right:28px; border-right:1px solid var(--line); color:var(--muted); font-size:12px; }
-.usage-summary span:last-child { padding-right:0; border-right:0; }
+.usage-summary { display:grid; grid-template-columns:1fr; gap:16px; margin-top:30px; padding-top:22px; border-top:1px solid var(--line); }
+.usage-summary span { display:grid; width:100%; gap:3px; color:var(--muted); font-size:12px; }
 .usage-summary strong { color:var(--ink); font-size:18px; letter-spacing:-.02em; }
 .analysis-form { overflow:hidden; padding:0; border-color:var(--line-strong); box-shadow:var(--shadow-lg); }
 .analysis-form__head { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:24px 26px; border-bottom:1px solid var(--line); background:#f8fafc; }
