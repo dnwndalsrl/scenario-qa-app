@@ -17,8 +17,9 @@ interface ReportIssue {
   recommendation: string;
 }
 
-const props = defineProps<{ snapshot: PageSnapshot; pageAnalysis: AiPageAnalysis }>();
+const props = withDefaults(defineProps<{ snapshot: PageSnapshot; pageAnalysis: AiPageAnalysis; compact?: boolean }>(), { compact: false });
 const activeFilter = ref<"all" | IssueCategory>("all");
+const showAllCompact = ref(false);
 
 const categoryMeta: Record<IssueCategory, { label: string; description: string }> = {
   analysis: { label: "분석 확인 필요", description: "페이지 구조와 콘텐츠를 바탕으로 발견한 항목" },
@@ -70,6 +71,9 @@ const groupedIssues = computed(() => (["analysis", "console", "network"] as cons
   .filter(group => group.items.length));
 
 const urgentCount = computed(() => issues.value.filter(issue => issue.tone === "danger").length);
+const filteredIssues = computed(() => issues.value.filter((issue) => activeFilter.value === "all" || issue.category === activeFilter.value));
+const compactIssues = computed(() => showAllCompact.value ? filteredIssues.value : filteredIssues.value.slice(0, 4));
+const remainingCompactCount = computed(() => Math.max(0, filteredIssues.value.length - compactIssues.value.length));
 
 function toAnalysisIssue(risk: PageRisk): ReportIssue {
   const evidenceCount = risk.relatedElementIds.length;
@@ -113,7 +117,7 @@ function formatDate(value: string): string {
   <section class="section card report-section report-section--issues">
     <div class="section-head issue-section-head">
       <div>
-        <h2>발견 문제 <span v-if="issues.length" class="issue-total">{{ issues.length }}건</span></h2>
+        <h2><span v-if="compact" class="issue-section-number">04</span>발견 문제 <span v-if="issues.length" class="issue-total">{{ issues.length }}건</span></h2>
         <p>테스트 결과와 별도로 수집한 항목입니다. 실제 결함 여부는 판정과 근거를 함께 확인해 주세요.</p>
       </div>
       <div v-if="issues.length" class="issue-overview" aria-label="발견 문제 요약">
@@ -123,6 +127,22 @@ function formatDate(value: string): string {
     </div>
 
     <div v-if="!issues.length" class="empty">현재 수집 범위에서 발견된 문제가 없습니다.</div>
+    <template v-else-if="compact">
+      <div class="issue-filters" aria-label="문제 유형 필터">
+        <button v-for="filter in filters" :key="filter.value" type="button" :class="{ active: activeFilter === filter.value }" :aria-pressed="activeFilter === filter.value" @click="activeFilter = filter.value; showAllCompact = false">
+          {{ filter.label }} <span>{{ filter.count }}</span>
+        </button>
+      </div>
+      <div class="compact-issues">
+        <div class="compact-issues__head"><span>판정</span><span>항목</span><span>근거</span></div>
+        <details v-for="issue in compactIssues" :key="issue.id" class="compact-issue">
+          <summary><strong>{{ issue.verdict }}</strong><span><b>{{ issue.title }}</b><small>{{ issue.summary }}</small></span><em>{{ issue.evidenceSummary }}</em></summary>
+          <div><section><strong>발견 근거</strong><ul><li v-for="evidence in issue.evidence" :key="evidence">{{ evidence }}</li></ul></section><section><strong>권장 조치</strong><p>{{ issue.recommendation }}</p></section></div>
+        </details>
+      </div>
+      <button v-if="remainingCompactCount" class="compact-issues__more" type="button" @click="showAllCompact = true">나머지 {{ remainingCompactCount }}건 보기</button>
+      <button v-else-if="showAllCompact && filteredIssues.length > 4" class="compact-issues__more" type="button" @click="showAllCompact = false">접기</button>
+    </template>
     <template v-else>
       <div class="issue-filters" aria-label="문제 유형 필터">
         <button v-for="filter in filters" :key="filter.value" type="button" :class="{ active: activeFilter === filter.value }" :aria-pressed="activeFilter === filter.value" @click="activeFilter = filter.value">
@@ -164,6 +184,7 @@ function formatDate(value: string): string {
 
 <style scoped>
 .issue-section-head { align-items: flex-start; }
+.issue-section-number{margin-right:12px;color:var(--text-4);font-family:var(--font-mono);font-size:var(--fs-meta);font-weight:var(--fw-regular);vertical-align:middle}
 .issue-total { color: var(--muted); font-size: 14px; font-weight: 700; vertical-align: middle; }
 .issue-overview { display: flex; gap: 8px; }
 .issue-overview span { padding: 8px 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -196,5 +217,6 @@ function formatDate(value: string): string {
 .issue-card__detail-grid strong { display: block; margin-bottom: 7px; font-size: 12px; }
 .issue-card__detail-grid p, .issue-card__detail-grid ul { margin: 0; color: #526176; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .issue-card__detail-grid ul { padding-left: 17px; }
+.report-section--issues:has(.compact-issues){padding:30px 0!important;border-top:1px solid var(--border)!important}.report-section--issues:has(.compact-issues) .section-head{padding:0!important}.report-section--issues:has(.compact-issues) .issue-overview{gap:16px}.report-section--issues:has(.compact-issues) .issue-overview span{padding:0;border:0;border-radius:0}.report-section--issues:has(.compact-issues) .issue-filters{gap:2px;padding:0 0 12px}.report-section--issues:has(.compact-issues) .issue-filters button{padding:5px 10px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-3);font-size:var(--fs-meta);font-weight:var(--fw-regular)}.report-section--issues:has(.compact-issues) .issue-filters button.active{border:1px solid var(--border);background:var(--surface-2);color:var(--ink)}.compact-issues{overflow:hidden;border-radius:var(--r-card);background:var(--surface)}.compact-issues__head,.compact-issue>summary{display:grid;grid-template-columns:100px minmax(0,1fr) 120px;align-items:center;gap:16px}.compact-issues__head{min-height:34px;padding:0 28px;color:var(--text-3);font-size:var(--fs-meta)}.compact-issue{margin:0 12px;border-bottom:1px solid var(--border)}.compact-issue:last-child{border-bottom:0}.compact-issue>summary{min-height:70px;padding:0 16px;cursor:pointer;list-style:none}.compact-issue>summary>strong{font-size:var(--fs-small);font-weight:var(--fw-medium)}.compact-issue>summary>span{display:flex;min-width:0;flex-direction:column}.compact-issue>summary b,.compact-issue>summary small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compact-issue>summary b{font-size:var(--fs-small);font-weight:var(--fw-medium)}.compact-issue>summary small{color:var(--text-2);font-size:var(--fs-small)}.compact-issue>summary em{overflow:hidden;color:var(--text-4);font-size:var(--fs-meta);font-style:normal;text-overflow:ellipsis;white-space:nowrap}.compact-issue>div{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:0 16px 18px 116px}.compact-issue>div strong{font-size:var(--fs-meta)}.compact-issue>div p,.compact-issue>div ul{margin:5px 0 0;color:var(--text-2);font-size:var(--fs-meta);line-height:1.5}.compact-issue>div ul{padding-left:16px}.compact-issues__more{margin-top:10px;padding:0;border:0;background:none;color:var(--text-3);font-size:var(--fs-small);font-weight:var(--fw-medium);cursor:pointer}
 
 </style>

@@ -1,4 +1,5 @@
 import type { GeneratedTestScenario, PageSnapshot } from "../../../../shared/types/analysis";
+import { isScenarioIncluded, isScenarioReviewEligible } from "../../../../shared/utils/scenario-review";
 import { ensureScenarioAssertions } from "../../../analysis/services/scenario-verification.service";
 import { buildAnalysisPreflight, inspectTargetReachability } from "../../../services/analysis-preflight.service";
 import { getOwnedAnalysis } from "../../../services/analysis-records.service";
@@ -30,11 +31,12 @@ export default defineEventHandler(async (event) => {
   for (const row of rows) {
     if (row.safety_level !== "safe" || !row.auto_executable) continue;
     const stored = row.payload as GeneratedTestScenario;
+    if (!isScenarioIncluded(stored)) continue;
     const snapshot = snapshots.find((item) => item.page_id === (stored.pageId || null))?.payload as PageSnapshot | undefined;
     if (!snapshot) continue;
     try {
       const scenario = ensureScenarioAssertions(stored, snapshot);
-      if (scenario.safetyLevel === "safe" && scenario.autoExecutable && scenario.steps.some((step) => step.action.startsWith("assert_"))) readyScenarioCount++;
+      if (isScenarioReviewEligible(scenario)) readyScenarioCount++;
     } catch { /* 실행 API가 동일 시나리오를 제외하므로 사전 점검에서도 준비되지 않은 것으로 계산합니다. */ }
   }
 

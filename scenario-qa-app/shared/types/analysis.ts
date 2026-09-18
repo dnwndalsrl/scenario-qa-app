@@ -112,6 +112,7 @@ export interface GeneratedTestScenario {
   category: "page_load" | "navigation" | "visibility" | "accessibility" | "form_validation" | "search" | "interaction" | "error_detection";
   safetyLevel: TestSafetyLevel; safetyReasons: string[]; confidence: number; autoExecutable: boolean; sourceElementIds: string[];
   steps: GeneratedTestStep[]; generatedAt: string; revision?: number; source?: "ai" | "user"; editedAt?: string; requirementIds?: string[];
+  reviewDisposition?: "included" | "excluded";
 }
 export interface DuplicateTestGroup { fingerprint: string; keptTestId: string; removedTestIds: string[]; }
 export interface TestDeduplicationResult { originalCount: number; deduplicatedCount: number; removedCount: number; groups: DuplicateTestGroup[]; }

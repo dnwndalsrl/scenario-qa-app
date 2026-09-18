@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { AnalysisDetail, SiteAnalysisStatus } from "~/shared/types/analysis";
-import type { AnalysisPreflight, PreflightStatus } from "~/shared/types/preflight";
+import type { AnalysisPreflight } from "~/shared/types/preflight";
 
 const route = useRoute();
 const { $api } = useNuxtApp();
@@ -192,10 +192,6 @@ async function cancel() {
   }
 }
 
-function preflightLabel(status: PreflightStatus) {
-  return status === "ready" ? "실행 가능" : status === "warning" ? "주의 필요" : "실행 불가";
-}
-
 async function checkPreflight() {
   preflightLoading.value = true;
   preflightError.value = "";
@@ -209,6 +205,11 @@ async function checkPreflight() {
   } finally {
     preflightLoading.value = false;
   }
+}
+
+async function refreshScenarioReview() {
+  await refreshDetail();
+  await checkPreflight();
 }
 
 async function runApproved() {
@@ -257,6 +258,20 @@ async function downloadPdfReport() {
     :busy="busy"
     @cancel="cancel"
   />
+  <ScenarioReviewView
+    v-else-if="data && data.analysis.processStage === 'scenario_review'"
+    :detail="data"
+    :preflight="preflight"
+    :preflight-loading="preflightLoading"
+    :preflight-error="preflightError"
+    :action-error="actionError"
+    :realtime-warning="realtimeWarning"
+    :busy="busy"
+    @run="runApproved"
+    @check="checkPreflight"
+    @changed="refreshScenarioReview"
+    @refresh="refreshDetail"
+  />
   <div v-else-if="data">
     <header class="report-head">
       <div>
@@ -266,8 +281,7 @@ async function downloadPdfReport() {
       </div>
       <div class="report-head__actions">
         <button v-if="data.analysis.processStage === 'report_complete'" type="button" class="report-download-button" :disabled="pdfDownloading" @click="downloadPdfReport">{{ pdfDownloading ? 'PDF 생성 중…' : 'PDF 다운로드' }}</button>
-        <button v-if="data.analysis.processStage === 'scenario_review'" class="primary-button" :disabled="busy || preflightLoading || !preflight?.canRun" @click="runApproved">{{ preflightLoading ? '실행 조건 확인 중…' : '시나리오 확정 및 테스트 실행' }}</button>
-        <button v-else-if="data.analysis.processStage === 'document_failed'" class="primary-button" :disabled="busy" @click="continueWithoutDocument">문서 없이 계속</button>
+        <button v-if="data.analysis.processStage === 'document_failed'" class="primary-button" :disabled="busy" @click="continueWithoutDocument">문서 없이 계속</button>
         <button v-else-if="data.analysis.processStage === 'report_complete' || data.analysis.processStage === 'failed'" class="primary-button" :disabled="busy" @click="retry">다시 분석</button>
         <button v-else class="secondary-button" :disabled="busy" @click="cancel">취소</button>
       </div>
@@ -282,18 +296,6 @@ async function downloadPdfReport() {
     <AnalysisSummary id="report-summary" v-if="data.analysis.summary && data.analysis.processStage === 'report_complete'" :summary="data.analysis.summary" />
     <RegressionComparison id="report-comparison" v-if="data.analysis.processStage === 'report_complete'" :analysis-id="data.analysis.id" />
     <AnalysisProcessSteps id="report-process" :stage="data.analysis.processStage" :has-document="Boolean(data.documentAnalysis)" />
-    <section v-if="data.analysis.processStage === 'scenario_review'" class="card preflight-panel" aria-labelledby="preflight-title">
-      <header class="preflight-panel__head">
-        <div><h2 id="preflight-title">실행 전 사전 점검</h2><p>환경 오류와 실제 테스트 실패를 구분하기 위해 실행 조건을 먼저 확인합니다.</p></div>
-        <div class="preflight-panel__actions"><span v-if="preflight" class="preflight-summary" :class="`preflight-summary--${preflight.status}`">{{ preflightLabel(preflight.status) }}</span><button type="button" :disabled="preflightLoading || busy" @click="checkPreflight">{{ preflightLoading ? '확인 중…' : '다시 점검' }}</button></div>
-      </header>
-      <div v-if="preflight" class="preflight-checks">
-        <article v-for="check in preflight.checks" :key="check.id" class="preflight-check" :class="`preflight-check--${check.status}`"><span class="preflight-check__mark" aria-hidden="true">{{ check.status === 'ready' ? '✓' : check.status === 'warning' ? '!' : '×' }}</span><div><strong>{{ check.label }}</strong><p>{{ check.message }}</p></div><span>{{ preflightLabel(check.status) }}</span></article>
-      </div>
-      <div v-else-if="preflightError" class="preflight-panel__error" role="alert">{{ preflightError }}</div>
-      <div v-else class="preflight-panel__loading">실행 조건을 확인하고 있습니다.</div>
-      <footer v-if="preflight"><strong>자동 실행 대상 {{ preflight.readyScenarioCount }}개</strong><span v-if="preflight.excludedScenarioCount"> · 수동 검토 또는 제외 {{ preflight.excludedScenarioCount }}개</span><small>대상 페이지 접근 경고는 실행기 위치에서 결과가 달라질 수 있어 자동으로 차단하지 않습니다.</small></footer>
-    </section>
     <RequirementDocumentPanel id="report-document" :document="data.documentAnalysis" />
     <RequirementCoverage id="report-coverage" :analysis-id="data.analysis.id" :document="data.documentAnalysis" :tests="data.generatedTests" :runs="data.testRuns" :can-run="data.analysis.processStage === 'report_complete'" @changed="refreshDetail" />
     <SiteAnalysisReport id="report-page" v-if="data.analysis.options.mode === 'site_crawl' && data.pages.length" :detail="data" @changed="refreshDetail" />

@@ -1,4 +1,5 @@
 import type { AutomatedTestRun, GeneratedTestScenario, PageSnapshot } from "../../../../shared/types/analysis";
+import { isScenarioIncluded, isScenarioReviewEligible } from "../../../../shared/utils/scenario-review";
 import { ensureScenarioAssertions } from "../../../analysis/services/scenario-verification.service";
 import { getOwnedAnalysis } from "../../../services/analysis-records.service";
 import { dispatchApprovedTestsWorkflow, githubConfigFromRuntime } from "../../../services/github-actions.service";
@@ -21,10 +22,12 @@ export default defineEventHandler(async (event) => {
 
   const executableScenarios = rows.map((row) => {
     const stored = row.payload as GeneratedTestScenario;
+    if (!isScenarioIncluded(stored)) return undefined;
     const snapshot = snapshotRows.find((item) => item.page_id === (stored.pageId || null))?.payload as PageSnapshot | undefined;
     if (!snapshot) throw createError({ statusCode: 409, statusMessage: "시나리오의 테스트 대상 페이지 스냅샷을 찾을 수 없습니다." });
     return { row, scenario: ensureScenarioAssertions(stored, snapshot) };
-  }).filter(({ scenario }) => scenario.safetyLevel === "safe" && scenario.autoExecutable);
+  }).filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .filter(({ scenario }) => isScenarioReviewEligible(scenario));
   if (!executableScenarios.length) throw createError({ statusCode: 409, statusMessage: "예상 결과를 검증할 수 있는 안전한 시나리오가 없습니다." });
 
   const values = executableScenarios.map(({ row, scenario }) => {

@@ -22,7 +22,8 @@ const props = withDefaults(defineProps<{
   compact?: boolean;
   reviewMode?: boolean;
   canRunSuites?: boolean;
-}>(), { runs: () => [], compact: false, reviewMode: false, canRunSuites: false });
+  focusTestId?: string;
+}>(), { runs: () => [], compact: false, reviewMode: false, canRunSuites: false, focusTestId: "" });
 const emit = defineEmits<{ changed: [] }>();
 const { $api } = useNuxtApp();
 const editingId = ref("");
@@ -293,6 +294,14 @@ watch(() => props.runs.map((run) => `${run.id}:${run.status}:${run.dispatch?.sta
   const active = props.runs.find((run) => run.id === activeRunId.value);
   if (active && !["pending", "running"].includes(active.status)) stopRefresh();
 });
+watch(() => props.focusTestId, (testId) => {
+  if (!testId) return;
+  if (testId === "__new") startAdd();
+  else {
+    const test = props.tests.find((item) => item.id === testId);
+    if (test) startEdit(test);
+  }
+}, { immediate: true });
 onBeforeUnmount(stopRefresh);
 </script>
 
@@ -303,7 +312,7 @@ onBeforeUnmount(stopRefresh);
       <div class="scenario-actions scenario-actions--head"><span class="tag">{{ tests.length }}개</span><button type="button" class="scenario-button scenario-button--download" :disabled="!tests.length || downloading" @click="downloadWorkbook">{{ downloading ? '엑셀 생성 중…' : '엑셀 다운로드' }}</button><button v-if="reviewMode && editingId !== '__new'" type="button" class="scenario-button" @click="startAdd">새 시나리오 추가</button></div>
     </div>
     <div v-if="feedback" :class="feedbackError ? 'error-box' : 'notice'">{{ feedback }}</div>
-    <TestSuiteManager v-if="!compact" :analysis-id="analysisId" :tests="tests" :runs="runs" :can-run="canRunSuites" @changed="emit('changed')" />
+    <TestSuiteManager v-if="!compact && !reviewMode" :analysis-id="analysisId" :tests="tests" :runs="runs" :can-run="canRunSuites" @changed="emit('changed')" />
     <p v-if="!tests.length && editingId !== '__new'" class="muted">생성된 테스트가 없습니다.</p>
     <div v-if="tests.length || editingId === '__new'" class="grid">
       <article v-if="editingId === '__new'" class="test-card"><form class="scenario-editor" @submit.prevent="save('__new')"><h3>사용자 시나리오 추가</h3><p class="muted">동작 뒤에 예상 결과 확인 단계를 1개 이상 추가해야 합니다.</p><label>제목<input v-model="drafts.__new!.title" required maxlength="160"></label><label>설명<textarea v-model="drafts.__new!.description" maxlength="500" rows="2" /></label><label>목적<textarea v-model="drafts.__new!.purpose" maxlength="500" rows="2" /></label><fieldset v-for="(step,index) in drafts.__new!.steps" :key="index" class="scenario-step" :class="{ 'scenario-step--assertion': isAssertion(step.action) }"><legend>{{ index+1 }}단계 · {{ isAssertion(step.action) ? '예상 결과' : '실행 동작' }}</legend><label>동작<select v-model="step.action" @change="onActionChanged(step)"><option v-for="action in actions" :key="action.value" :value="action.value">{{ action.label }}</option></select></label><label v-if="needsElement(step.action)">대상 요소<select v-model="step.elementId" required><option value="" disabled>요소를 선택하세요</option><option v-for="element in snapshot.elements" :key="element.id" :value="element.id">{{ elementLabel(element.id) }}</option></select></label><label>설명<input v-model="step.description" required maxlength="300"></label><label v-if="valueLabel(step.action)">{{ valueLabel(step.action) }}<input v-model="step.value" maxlength="500"></label><label v-if="['assert_url','assert_title','assert_text','assert_scroll','assert_attribute','assert_value','assert_count'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500" :placeholder="step.action === 'assert_scroll' ? '#대상ID 또는 changed' : step.action === 'assert_count' ? '0 이상의 정수' : ''"></label><button type="button" class="scenario-button" :disabled="drafts.__new!.steps.length === 1" @click="removeStep('__new',index)">단계 삭제</button></fieldset><div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep('__new')">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" @click="cancelEdit">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === '__new'">{{ busyId === '__new' ? '저장 중…' : '추가' }}</button></div></form></article>
@@ -314,7 +323,7 @@ onBeforeUnmount(stopRefresh);
           <p v-if="test.safetyReasons.length" class="muted">안전성 근거: {{ test.safetyReasons.join(' ') }}</p>
           <div class="test-meta"><span v-for="id in test.sourceElementIds" :key="id" class="tag">{{ elementLabel(id) }}</span></div>
           <div v-if="test.requirementIds?.length" class="test-meta"><span v-for="id in test.requirementIds" :key="id" class="tag tag--review">요구사항 {{ id }}</span></div>
-          <details class="scenario-flow scenario-disclosure" :open="reviewMode || runFailed(test.id)">
+          <details class="scenario-flow scenario-disclosure" :open="runFailed(test.id)">
             <summary>실행 단계와 예상 결과 보기</summary>
             <section><h4>실행 단계</h4><ol class="steps scenario-steps"><li v-for="step in executionSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ step.description }}</span></li></ol></section>
             <section class="scenario-expectations"><h4>예상 결과</h4><ol class="steps scenario-steps"><li v-for="step in expectedSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ expectedLabel(step) }}</span></li></ol><p v-if="!expectedSteps(test).length" class="scenario-verification-warning">자동으로 판정할 예상 결과가 없어 실행 전 검토가 필요합니다.</p></section>
