@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>폰트 검증</title>
+<style>
+@font-face{font-family:"Pretendard";font-weight:400;src:url(../fonts/Pretendard-Regular.woff2) format("woff2")}
+@font-face{font-family:"Pretendard";font-weight:500;src:url(../fonts/Pretendard-Medium.woff2) format("woff2")}
+@font-face{font-family:"Pretendard";font-weight:600;src:url(../fonts/Pretendard-SemiBold.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:400;src:url(../fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:500;src:url(../fonts/jetbrains-mono-latin-500-normal.woff2) format("woff2")}
+body{margin:0;padding:48px 120px;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;color:#0a0a0a;background:#fff}
+h1{font-size:24px;line-height:32px;font-weight:600;margin:0 0 6px}
+p.d{margin:0 0 32px;font-size:14px;color:#737373}
+table{border-collapse:collapse;width:100%}
+td,th{text-align:left;padding:12px 16px;border-bottom:1px solid #e5e5e5;vertical-align:baseline}
+th{font-size:12px;font-weight:500;color:#737373}
+td.k{font-size:13px;color:#737373;white-space:nowrap;width:220px}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+#status{margin-top:32px;padding:14px 16px;border:1px solid #0a0a0a;border-radius:8px;font-size:13px}
+#status span{display:block}
+.bad{font-weight:600}
+</style>
+</head>
+<body>
+<h1>폰트 검증</h1>
+<p class="d">이 페이지를 1440px에서 열어 아래 표와 하단 결과를 확인한다. 기대값과 다르면 폰트 파일 경로 또는 @font-face 선언을 점검한다.</p>
+<table>
+<tr><th>항목</th><th>표시 결과</th><th>기대값</th></tr>
+<tr><td class="k">Pretendard 400</td><td style="font-size:14px;font-weight:400">다람쥐 헌 쳇바퀴에 타고파 · The quick brown fox 0123456789</td><td class="k">가로로 넓은 한글, ㄷ·ㄹ 획이 곧고 균일</td></tr>
+<tr><td class="k">Pretendard 500</td><td style="font-size:14px;font-weight:500">다람쥐 헌 쳇바퀴에 타고파 · The quick brown fox 0123456789</td><td class="k">400보다 살짝 굵음 (합성 굵기 아님)</td></tr>
+<tr><td class="k">Pretendard 600</td><td style="font-size:14px;font-weight:600">다람쥐 헌 쳇바퀴에 타고파 · The quick brown fox 0123456789</td><td class="k">500과 뚜렷히 다름, 700처럼 두껍지 않음</td></tr>
+<tr><td class="k">Pretendard 700 (금지)</td><td style="font-size:14px;font-weight:700">다람쥐 헌 쳇바퀴에 타고파</td><td class="k bad">600과 동일하게 보여야 함 — 다르게 보이면 700 폰트가 로드된 것</td></tr>
+<tr><td class="k">JetBrains Mono 400</td><td class="mono" style="font-size:13px">https://www.ecredit.co.kr/ · element-12 · 9. 2. 15:05 · 893ms · 0/20</td><td class="k">모든 글자 폭 동일, 0에 사선 또는 점</td></tr>
+<tr><td class="k">JetBrains Mono 500</td><td class="mono" style="font-size:13px;font-weight:500">page.goto: Timeout 10000ms exceeded</td><td class="k">400보다 살짝 굵음</td></tr>
+<tr><td class="k">모노 + 한글 (금지 사례)</td><td class="mono" style="font-size:13px">요소 70개 · 2026. 9. 2. 오후 3:05</td><td class="k bad">한글만 다른 폰트로 튀어 보이면 정상 — 이런 조합을 실제 화면에 쓰지 말 것</td></tr>
+<tr><td class="k">숫자 정렬</td><td style="font-size:32px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.02em">1,234 / 5,678 / 0,000</td><td class="k">세 그룹 폭 동일 (tabular-nums)</td></tr>
+</table>
+<div id="status" role="status">확인 중…</div>
+<script>
+(async()=>{
+  await document.fonts.ready;
+  const checks=[["400 14px Pretendard","Pretendard 400"],["500 14px Pretendard","Pretendard 500"],["600 14px Pretendard","Pretendard 600"],["400 13px 'JetBrains Mono'","JetBrains Mono 400"],["500 13px 'JetBrains Mono'","JetBrains Mono 500"]];
+  const loaded=[...document.fonts].filter(f=>f.status==="loaded").map(f=>`${f.family} ${f.weight}`);
+  const out=checks.map(([q,n])=>`${document.fonts.check(q)?"✓":"✕"} ${n}`);
+  const has700=loaded.some(l=>/Pretendard/.test(l)&&/700|bold/i.test(l));
+  out.push(has700?"✕ Pretendard 700이 로드됨 — 제거":"✓ 700 이상 웨이트 없음");
+  out.push(`로드된 폰트: ${loaded.join(", ")||"(없음)"}`);
+  document.getElementById("status").innerHTML=out.map(s=>`<span>${s}</span>`).join("");
+})();
+</script>
+</body>
+</html>
