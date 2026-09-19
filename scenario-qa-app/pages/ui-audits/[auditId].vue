@@ -134,7 +134,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
         </div>
       </div>
       <nav v-if="data.audit.status === 'completed'" class="ui-audit-result-nav" aria-label="UI 점검 결과 메뉴">
-        <a href="#ui-audit-summary">결과 요약</a><a v-if="data.audit.issues.length" href="#ui-audit-guide">수정 가이드</a><a v-if="pageArtifacts.length" href="#ui-audit-captures">화면 기록</a>
+        <a href="#ui-audit-summary">결과 요약</a><a v-if="pageArtifacts.length" href="#ui-audit-captures">화면 기록</a><a v-if="data.audit.issues.length" href="#ui-audit-guide">수정 가이드</a>
       </nav>
       <section :id="data.audit.status === 'completed' ? 'ui-audit-summary' : undefined" :class="data.audit.status === 'completed' ? 'ui-audit-complete' : 'card ui-audit-queued'">
         <template v-if="data.audit.status !== 'completed'">
@@ -180,6 +180,21 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
             </figure>
           </div>
           <p>이 비교는 검토 보조 지표입니다. 동적 콘텐츠와 폰트 렌더링 차이는 결함으로 자동 등록하지 않습니다.</p>
+        </section>
+
+        <section v-if="pageArtifacts.length" id="ui-audit-captures" class="ui-audit-captures" aria-labelledby="ui-audit-captures-title">
+          <header>
+            <div><span>화면 기록</span><h3 id="ui-audit-captures-title">점검 과정에서 수집한 전체 화면</h3></div>
+            <p>페이지를 단계별로 스크롤하며 검사한 화면입니다. 각 문제의 상세 영역에서도 관련 화면을 확인할 수 있습니다.</p>
+          </header>
+          <div class="ui-audit-screenshots">
+            <figure v-for="artifact in pageArtifacts" :key="artifact.id">
+              <a v-if="artifact.signedUrl" :href="artifact.signedUrl" target="_blank" rel="noopener noreferrer">
+                <img :src="artifact.signedUrl" :alt="`${stateLabel(artifact.state)} 전체 화면`">
+              </a>
+              <figcaption><strong>{{ stateLabel(artifact.state) }}</strong><span>{{ artifact.width }}×{{ artifact.height }} · 크게 보기</span></figcaption>
+            </figure>
+          </div>
         </section>
 
         <section v-if="data.audit.issues.length" id="ui-audit-guide" class="ui-remediation">
@@ -250,7 +265,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
                     <option v-for="(label,status) in reviewLabels" :key="status" :value="status">{{ label }}</option>
                   </select>
                 </label>
-                <label>메모
+                <label><span class="sr-only">메모</span>
                   <input v-model="reviewDrafts[group.rule]!.note" maxlength="1000" placeholder="판정 근거를 선택적으로 입력하세요." @input="clearReviewFeedback(group.rule)">
                 </label>
                 <div class="ui-remediation-review__actions">
@@ -275,20 +290,6 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
           <p v-else class="empty">선택한 조건에 해당하는 문제가 없습니다.</p>
         </section>
         <p v-else-if="data.audit.status === 'completed'" class="notice">자동 판정 가능한 UI 규칙 위반을 발견하지 못했습니다.</p>
-        <section v-if="pageArtifacts.length" id="ui-audit-captures" class="ui-audit-captures" aria-labelledby="ui-audit-captures-title">
-          <header>
-            <div><span>화면 기록</span><h3 id="ui-audit-captures-title">점검 과정에서 수집한 전체 화면</h3></div>
-            <p>페이지를 단계별로 스크롤하며 검사한 화면입니다. 각 문제의 상세 영역에서도 관련 화면을 확인할 수 있습니다.</p>
-          </header>
-          <div class="ui-audit-screenshots">
-            <figure v-for="artifact in pageArtifacts" :key="artifact.id">
-              <a v-if="artifact.signedUrl" :href="artifact.signedUrl" target="_blank" rel="noopener noreferrer">
-                <img :src="artifact.signedUrl" :alt="`${stateLabel(artifact.state)} 전체 화면`">
-              </a>
-              <figcaption><strong>{{ stateLabel(artifact.state) }}</strong><span>{{ artifact.width }}×{{ artifact.height }} · 크게 보기</span></figcaption>
-            </figure>
-          </div>
-        </section>
         <figure v-if="data.audit.reference?.signedUrl && !comparison" class="design-reference-preview">
           <img :src="data.audit.reference.signedUrl" :alt="`${data.audit.reference.fileName} 디자인 원본`">
           <figcaption>디자인 원본 · {{ data.audit.reference.fileName }} · {{ data.audit.reference.width }}×{{ data.audit.reference.height }}</figcaption>
@@ -362,9 +363,10 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
 .ui-audit-complete .ui-remediation-evidence span strong { font-size: var(--fs-small); font-weight: var(--fw-medium); }
 .ui-audit-complete .ui-remediation-evidence span small { color: var(--text-3); font-size: var(--fs-meta); }
 .ui-audit-complete .ui-remediation-elements dl > div { background: var(--surface); }
-.ui-audit-complete .ui-remediation-review { grid-template-columns: 140px minmax(0,1fr) auto; align-items: center; gap: 8px; padding: var(--inner-card-pad) var(--panel-pad); border: 0; background: var(--bg); }
-.ui-audit-complete .ui-remediation-review label { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: var(--fs-meta); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-review { grid-template-columns: max-content minmax(0,1fr) max-content; align-items: center; gap: 8px; padding: var(--inner-card-pad) var(--panel-pad); border: 0; background: var(--bg); }
+.ui-audit-complete .ui-remediation-review label { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--ink); font-size: var(--fs-meta); font-weight: var(--fw-medium); white-space: nowrap; }
 .ui-audit-complete .ui-remediation-review select,.ui-audit-complete .ui-remediation-review input { min-width: 0; width: 100%; height: var(--h-input-sm); min-height: var(--h-input-sm); border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--bg); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-review select { width: auto; flex: none; }
 .ui-audit-complete .ui-remediation-review input { padding: 0 12px; }
 .ui-audit-complete .ui-remediation-review__actions { display: flex; align-items: center; gap: 8px; }
 .ui-audit-complete .ui-remediation-review__actions button { min-height: var(--h-btn-sm); }
