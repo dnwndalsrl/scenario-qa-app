@@ -272,6 +272,18 @@ async function downloadPdfReport() {
     @changed="refreshScenarioReview"
     @refresh="refreshDetail"
   />
+  <ReportDoneView
+    v-else-if="data && data.analysis.processStage === 'report_complete' && data.analysis.options.mode !== 'site_crawl'"
+    :detail="data"
+    :busy="busy"
+    :pdf-downloading="pdfDownloading"
+    :action-error="actionError"
+    :realtime-warning="realtimeWarning"
+    @retry="retry"
+    @download-pdf="downloadPdfReport"
+    @changed="refreshDetail"
+    @refresh="refreshDetail"
+  />
   <div v-else-if="data">
     <header class="report-head">
       <div>

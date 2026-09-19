@@ -17,7 +17,7 @@ interface ReportIssue {
   recommendation: string;
 }
 
-const props = withDefaults(defineProps<{ snapshot: PageSnapshot; pageAnalysis: AiPageAnalysis; compact?: boolean }>(), { compact: false });
+const props = withDefaults(defineProps<{ snapshot: PageSnapshot; pageAnalysis: AiPageAnalysis; compact?: boolean; sectionNumber?: string }>(), { compact: false, sectionNumber: "04" });
 const activeFilter = ref<"all" | IssueCategory>("all");
 const showAllCompact = ref(false);
 
@@ -117,7 +117,7 @@ function formatDate(value: string): string {
   <section class="section card report-section report-section--issues">
     <div class="section-head issue-section-head">
       <div>
-        <h2><span v-if="compact" class="issue-section-number">04</span>발견 문제 <span v-if="issues.length" class="issue-total">{{ issues.length }}건</span></h2>
+        <h2><span v-if="compact" class="issue-section-number">{{ sectionNumber }}</span>발견 문제 <span v-if="issues.length" class="issue-total">{{ issues.length }}건</span></h2>
         <p>테스트 결과와 별도로 수집한 항목입니다. 실제 결함 여부는 판정과 근거를 함께 확인해 주세요.</p>
       </div>
       <div v-if="issues.length" class="issue-overview" aria-label="발견 문제 요약">
