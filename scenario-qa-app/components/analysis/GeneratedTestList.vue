@@ -23,8 +23,9 @@ const props = withDefaults(defineProps<{
   reviewMode?: boolean;
   canRunSuites?: boolean;
   focusTestId?: string;
-}>(), { runs: () => [], compact: false, reviewMode: false, canRunSuites: false, focusTestId: "" });
-const emit = defineEmits<{ changed: [] }>();
+  modalMode?: boolean;
+}>(), { runs: () => [], compact: false, reviewMode: false, canRunSuites: false, focusTestId: "", modalMode: false });
+const emit = defineEmits<{ changed: []; cancelled: [] }>();
 const { $api } = useNuxtApp();
 const editingId = ref("");
 const aiComposerId = ref("");
@@ -37,6 +38,7 @@ const feedback = ref("");
 const feedbackError = ref(false);
 const downloading = ref(false);
 const activeRunId = ref("");
+const visibleTests = computed(() => props.modalMode ? props.tests.filter((test) => test.id === props.focusTestId) : props.tests);
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let refreshDeadline = 0;
 
@@ -179,12 +181,25 @@ function startAdd() {
   feedback.value = "";
 }
 function cancelEdit() {
+  const wasNew = editingId.value === "__new";
   if (editingId.value) {
     delete aiSummaries.value[editingId.value];
     delete aiDraftKinds.value[editingId.value];
   }
   editingId.value = "";
+  if (wasNew && props.modalMode) emit("cancelled");
 }
+function hasUnsavedChanges() {
+  if (!editingId.value) return false;
+  if (editingId.value === "__new") {
+    const initial = { title: "", description: "", purpose: "", steps: [{ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() }] };
+    return JSON.stringify(drafts.value.__new) !== JSON.stringify(initial);
+  }
+  const original = props.tests.find((test) => test.id === editingId.value);
+  const draft = drafts.value[editingId.value];
+  return Boolean(original && draft && JSON.stringify({ title: original.title, description: original.description, purpose: original.purpose, steps: original.steps.map((step) => ({ action: step.action, description: step.description, elementId: step.elementId, value: step.value, expected: step.expected, timeoutMs: step.timeoutMs })) }) !== JSON.stringify(draft));
+}
+defineExpose({ hasUnsavedChanges, isBusy: () => Boolean(busyId.value) });
 function addStep(testId: string) {
   drafts.value[testId]?.steps.push({ action: "assert_visible", description: "대상 요소가 표시되는지 확인", elementId: defaultElementId() });
 }
@@ -297,7 +312,7 @@ watch(() => props.runs.map((run) => `${run.id}:${run.status}:${run.dispatch?.sta
 watch(() => props.focusTestId, (testId) => {
   if (!testId) return;
   if (testId === "__new") startAdd();
-  else {
+  else if (!props.modalMode) {
     const test = props.tests.find((item) => item.id === testId);
     if (test) startEdit(test);
   }
@@ -306,24 +321,24 @@ onBeforeUnmount(stopRefresh);
 </script>
 
 <template>
-  <component :is="compact ? 'div' : 'section'" :class="compact ? 'detail-block' : 'section card report-section report-section--tests'">
-    <div class="section-head">
+  <component :is="compact || modalMode ? 'div' : 'section'" :class="modalMode ? 'scenario-modal-content' : compact ? 'detail-block' : 'section card report-section report-section--tests'">
+    <div v-if="!modalMode" class="section-head">
       <div><h2 v-if="!compact">AI가 제안한 테스트</h2><h3 v-else>자동 생성 테스트</h3><p>시나리오를 수정하거나 안전한 테스트 한 건만 다시 실행할 수 있습니다.</p></div>
       <div class="scenario-actions scenario-actions--head"><span class="tag">{{ tests.length }}개</span><button type="button" class="scenario-button scenario-button--download" :disabled="!tests.length || downloading" @click="downloadWorkbook">{{ downloading ? '엑셀 생성 중…' : '엑셀 다운로드' }}</button><button v-if="reviewMode && editingId !== '__new'" type="button" class="scenario-button" @click="startAdd">새 시나리오 추가</button></div>
     </div>
     <div v-if="feedback" :class="feedbackError ? 'error-box' : 'notice'">{{ feedback }}</div>
     <TestSuiteManager v-if="!compact && !reviewMode" :analysis-id="analysisId" :tests="tests" :runs="runs" :can-run="canRunSuites" @changed="emit('changed')" />
-    <p v-if="!tests.length && editingId !== '__new'" class="muted">생성된 테스트가 없습니다.</p>
-    <div v-if="tests.length || editingId === '__new'" class="grid">
+    <p v-if="!visibleTests.length && editingId !== '__new'" class="muted">생성된 테스트가 없습니다.</p>
+    <div v-if="visibleTests.length || editingId === '__new'" class="grid">
       <article v-if="editingId === '__new'" class="test-card"><form class="scenario-editor" @submit.prevent="save('__new')"><h3>사용자 시나리오 추가</h3><p class="muted">동작 뒤에 예상 결과 확인 단계를 1개 이상 추가해야 합니다.</p><label>제목<input v-model="drafts.__new!.title" required maxlength="160"></label><label>설명<textarea v-model="drafts.__new!.description" maxlength="500" rows="2" /></label><label>목적<textarea v-model="drafts.__new!.purpose" maxlength="500" rows="2" /></label><fieldset v-for="(step,index) in drafts.__new!.steps" :key="index" class="scenario-step" :class="{ 'scenario-step--assertion': isAssertion(step.action) }"><legend>{{ index+1 }}단계 · {{ isAssertion(step.action) ? '예상 결과' : '실행 동작' }}</legend><label>동작<select v-model="step.action" @change="onActionChanged(step)"><option v-for="action in actions" :key="action.value" :value="action.value">{{ action.label }}</option></select></label><label v-if="needsElement(step.action)">대상 요소<select v-model="step.elementId" required><option value="" disabled>요소를 선택하세요</option><option v-for="element in snapshot.elements" :key="element.id" :value="element.id">{{ elementLabel(element.id) }}</option></select></label><label>설명<input v-model="step.description" required maxlength="300"></label><label v-if="valueLabel(step.action)">{{ valueLabel(step.action) }}<input v-model="step.value" maxlength="500"></label><label v-if="['assert_url','assert_title','assert_text','assert_scroll','assert_attribute','assert_value','assert_count'].includes(step.action)">예상값<input v-model="step.expected" maxlength="500" :placeholder="step.action === 'assert_scroll' ? '#대상ID 또는 changed' : step.action === 'assert_count' ? '0 이상의 정수' : ''"></label><button type="button" class="scenario-button" :disabled="drafts.__new!.steps.length === 1" @click="removeStep('__new',index)">단계 삭제</button></fieldset><div class="scenario-actions"><button type="button" class="scenario-button" @click="addStep('__new')">단계 추가</button><span class="scenario-spacer"/><button type="button" class="scenario-button" @click="cancelEdit">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === '__new'">{{ busyId === '__new' ? '저장 중…' : '추가' }}</button></div></form></article>
-      <article v-for="(test, testIndex) in tests" :id="`scenario-${test.id}`" :key="test.id" class="test-card scenario-card">
+      <article v-for="(test, testIndex) in visibleTests" :id="`scenario-${test.id}`" :key="test.id" class="test-card scenario-card">
         <template v-if="editingId !== test.id">
           <div class="test-card__head"><div class="scenario-card__identity"><span class="scenario-card__number">{{ String(testIndex + 1).padStart(2, '0') }}</span><div><h3>{{ test.title }}</h3><p class="muted">{{ test.purpose }}</p></div></div><span class="tag" :class="`tag--${test.safetyLevel}`">{{ uiLabel(test.safetyLevel) }}</span></div>
           <div class="test-meta"><span class="tag">{{ uiLabel(test.category) }}</span><span class="tag">신뢰도 {{ Math.round(test.confidence * 100) }}%</span><span class="tag">수정 {{ test.revision || 1 }}판</span><span class="tag">{{ test.autoExecutable ? '자동 실행 가능' : '실행 검토 필요' }}</span></div>
           <p v-if="test.safetyReasons.length" class="muted">안전성 근거: {{ test.safetyReasons.join(' ') }}</p>
           <div class="test-meta"><span v-for="id in test.sourceElementIds" :key="id" class="tag">{{ elementLabel(id) }}</span></div>
           <div v-if="test.requirementIds?.length" class="test-meta"><span v-for="id in test.requirementIds" :key="id" class="tag tag--review">요구사항 {{ id }}</span></div>
-          <details class="scenario-flow scenario-disclosure" :open="runFailed(test.id)">
+          <details class="scenario-flow scenario-disclosure" :open="modalMode || runFailed(test.id)">
             <summary>실행 단계와 예상 결과 보기</summary>
             <section><h4>실행 단계</h4><ol class="steps scenario-steps"><li v-for="step in executionSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ step.description }}</span></li></ol></section>
             <section class="scenario-expectations"><h4>예상 결과</h4><ol class="steps scenario-steps"><li v-for="step in expectedSteps(test)" :key="step.id"><strong>{{ actionLabel(step.action) }}</strong><span>{{ expectedLabel(step) }}</span></li></ol><p v-if="!expectedSteps(test).length" class="scenario-verification-warning">자동으로 판정할 예상 결과가 없어 실행 전 검토가 필요합니다.</p></section>
@@ -335,7 +350,7 @@ onBeforeUnmount(stopRefresh);
             <p>AI가 현재 시나리오와 수집된 페이지 요소를 바탕으로 초안을 만듭니다. 자동 저장되지 않습니다.</p>
             <div class="scenario-actions"><button type="button" class="scenario-button" :disabled="busyId === test.id" @click="aiComposerId = ''">취소</button><button type="submit" class="scenario-button scenario-button--primary" :disabled="busyId === test.id || (aiInstructions[test.id]?.trim().length || 0) < 3">{{ busyId === test.id ? '수정안 생성 중…' : 'AI 수정안 만들기' }}</button></div>
           </form>
-          <div class="scenario-actions"><button v-if="runFailed(test.id)" type="button" class="scenario-button scenario-button--fix" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="createFailureFixDraft(test.id)">{{ busyId === test.id ? '실패 근거 분석 중…' : '원인 분석·수정안 받기' }}</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button><details class="scenario-more"><summary class="scenario-button">수정 옵션</summary><div><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="openAiComposer(test.id)">AI로 수정 요청</button><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">직접 수정</button></div></details></div>
+          <div class="scenario-actions"><button v-if="runFailed(test.id) && !modalMode" type="button" class="scenario-button scenario-button--fix" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="createFailureFixDraft(test.id)">{{ busyId === test.id ? '실패 근거 분석 중…' : '원인 분석·수정안 받기' }}</button><button v-if="!reviewMode" type="button" class="scenario-button scenario-button--primary" :disabled="Boolean(busyId) || runIsActive(test.id) || test.safetyLevel !== 'safe' || !test.autoExecutable" @click="rerun(test.id)">{{ busyId === test.id ? '처리 중…' : runIsActive(test.id) ? '실행 중…' : '이 테스트만 다시 실행' }}</button><button v-if="modalMode" type="button" class="scenario-modal__edit" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">수정 →</button><details v-else class="scenario-more"><summary class="scenario-button">수정 옵션</summary><div><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="openAiComposer(test.id)">AI로 수정 요청</button><button type="button" class="scenario-button" :disabled="Boolean(busyId) || runIsActive(test.id)" @click="startEdit(test)">직접 수정</button></div></details></div>
         </template>
         <form v-else class="scenario-editor" @submit.prevent="save(test.id)">
           <div v-if="aiSummaries[test.id]" class="scenario-ai-draft-notice"><strong>{{ aiDraftKinds[test.id] === 'failure_fix' ? '실패 근거로 만든 검토 전 수정안' : 'AI가 만든 검토 전 초안' }}</strong><span>{{ aiSummaries[test.id] }}</span><small>대상 요소와 예상 결과를 확인한 뒤 저장해 주세요. 취소하면 기존 시나리오는 유지됩니다.</small></div>
