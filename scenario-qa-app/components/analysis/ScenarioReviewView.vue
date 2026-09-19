@@ -22,6 +22,7 @@ const downloading = ref(false);
 const selectedScenarioId = ref("");
 const modalRef = ref<HTMLDialogElement | null>(null);
 const editorRef = ref<{ hasUnsavedChanges: () => boolean; isBusy: () => boolean } | null>(null);
+let previousPageOverflow: string | null = null;
 
 const analysis = computed(() => props.detail.analysis);
 const snapshot = computed(() => props.detail.snapshot);
@@ -84,11 +85,19 @@ async function openModal(testId: string) {
   selectedScenarioId.value = testId;
   await nextTick();
   modalRef.value?.showModal();
+  previousPageOverflow = document.documentElement.style.overflow;
+  document.documentElement.style.overflow = "hidden";
+}
+function releasePageScroll() {
+  if (previousPageOverflow === null) return;
+  document.documentElement.style.overflow = previousPageOverflow;
+  previousPageOverflow = null;
 }
 function closeModal() {
   if (editorRef.value?.isBusy()) return;
   if (editorRef.value?.hasUnsavedChanges() && !window.confirm("저장하지 않은 수정 내용을 버릴까요?")) return;
   modalRef.value?.close();
+  releasePageScroll();
   selectedScenarioId.value = "";
 }
 function onModalCancel(event: Event) {
@@ -99,9 +108,11 @@ function onEditorChanged() {
   emit("changed");
   if (selectedScenarioId.value === "__new") {
     modalRef.value?.close();
+    releasePageScroll();
     selectedScenarioId.value = "";
   }
 }
+onBeforeUnmount(releasePageScroll);
 </script>
 
 <template>
@@ -180,8 +191,8 @@ function onEditorChanged() {
       <div v-else class="empty">생성된 테스트 시나리오가 없습니다.</div>
     </section>
 
-    <dialog v-if="selectedScenarioId && snapshot" ref="modalRef" class="scenario-review__dialog" aria-labelledby="scenario-dialog-title" @cancel="onModalCancel">
-      <header><div><h2 id="scenario-dialog-title">{{ selectedScenarioId === '__new' ? '새 시나리오 추가' : '시나리오 상세 보기' }}</h2><p>실행 단계와 예상 결과를 확인한 뒤 필요한 경우 수정할 수 있습니다.</p></div><button type="button" class="secondary-button" @click="closeModal">닫기</button></header>
+    <dialog v-if="selectedScenarioId && snapshot" ref="modalRef" class="scenario-review__dialog" aria-labelledby="scenario-dialog-title" @cancel="onModalCancel" @close="releasePageScroll">
+      <header><div><h2 id="scenario-dialog-title">{{ selectedScenarioId === '__new' ? '새 시나리오 추가' : '시나리오 상세 보기' }}</h2><p>실행 단계와 예상 결과를 확인한 뒤 필요한 경우 수정할 수 있습니다.</p></div><button type="button" class="scenario-review__close" aria-label="닫기" @click="closeModal">×</button></header>
       <GeneratedTestList ref="editorRef" :analysis-id="analysis.id" :tests="detail.generatedTests" :snapshot="snapshot" :runs="detail.testRuns" review-mode modal-mode :focus-test-id="selectedScenarioId" @changed="onEditorChanged" @cancelled="closeModal" />
     </dialog>
 
@@ -207,7 +218,8 @@ function onEditorChanged() {
 .scenario-table__summary small{color:var(--text-2);font-family:var(--font-sans);font-size:var(--fs-small)}
 .scenario-table__actions button{white-space:nowrap}
 .scenario-review__dialog{width:var(--focus-w);max-width:calc(100vw - var(--report-gap) - var(--report-gap));max-height:calc(100vh - var(--report-gap) - var(--report-gap));padding:var(--card-pad);overflow:auto;border:1px solid var(--border);border-radius:var(--r-composer);background:var(--bg);color:var(--ink);font-family:var(--font-sans)}
-.scenario-review__dialog::backdrop{background:rgba(255,255,255,.6)}
+.scenario-review__dialog::backdrop{background:color-mix(in srgb,var(--ink) 20%,transparent)}
+.scenario-review__close{display:grid;min-width:var(--h-btn-sm);min-height:var(--h-btn-sm);flex:none;align-self:flex-start;place-items:center;padding:0;border:0;background:none;color:var(--ink);font-family:var(--font-sans);font-size:var(--fs-h1);line-height:var(--lh-h1);font-weight:var(--fw-regular);cursor:pointer}
 .scenario-review__dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--section-gap);margin-bottom:var(--section-gap)}
 .scenario-review__dialog h2{margin:0;font-size:var(--fs-h2);line-height:var(--lh-h2)}
 .scenario-review__dialog header p{margin:var(--label-gap) 0 0;color:var(--text-3);font-size:var(--fs-small)}
@@ -227,4 +239,8 @@ function onEditorChanged() {
 .scenario-review__dialog :deep(.scenario-modal-content .scenario-modal__edit){padding:0;border:0;background:none;color:var(--ink);font-family:var(--font-sans);font-size:var(--fs-small);font-weight:var(--fw-medium);cursor:pointer}
 .scenario-review__dialog :deep(.scenario-modal-content .scenario-modal__edit:disabled){opacity:.45;cursor:not-allowed}
 .scenario-review__dialog :deep(.scenario-modal-content .scenario-button--primary){border:1px solid var(--border);background:var(--bg);color:var(--ink);box-shadow:none}
+.scenario-review__dialog :deep(.scenario-card__identity){flex:1;min-width:0}
+.scenario-review__dialog :deep(.test-card__head>.tag){flex:none;white-space:nowrap;font-family:var(--font-sans)}
+.scenario-review__dialog :deep(.scenario-modal-content .scenario-actions button){width:auto;min-height:var(--h-btn);padding:0 14px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:var(--fs-small);font-weight:var(--fw-medium);box-shadow:none;cursor:pointer}
+.scenario-review__dialog :deep(.scenario-modal-content .scenario-actions button:disabled){opacity:.5;cursor:not-allowed}
 </style>
