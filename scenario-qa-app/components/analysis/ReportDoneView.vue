@@ -14,6 +14,7 @@ const downloadError = ref("");
 const selectedScenarioId = ref("");
 const modalRef = ref<HTMLDialogElement | null>(null);
 const editorRef = ref<{ hasUnsavedChanges: () => boolean; isBusy: () => boolean } | null>(null);
+let previousPageOverflow: string | null = null;
 const analysis = computed(() => props.detail.analysis);
 const summary = computed(() => props.detail.analysis.summary);
 const summaryPurpose = computed(() => {
@@ -31,14 +32,23 @@ async function openModal(testId: string) {
   selectedScenarioId.value = testId;
   await nextTick();
   modalRef.value?.showModal();
+  previousPageOverflow = document.documentElement.style.overflow;
+  document.documentElement.style.overflow = "hidden";
+}
+function releasePageScroll() {
+  if (previousPageOverflow === null) return;
+  document.documentElement.style.overflow = previousPageOverflow;
+  previousPageOverflow = null;
 }
 function closeModal() {
   if (editorRef.value?.isBusy()) return;
   if (editorRef.value?.hasUnsavedChanges() && !window.confirm("저장하지 않은 수정 내용을 버릴까요?")) return;
   modalRef.value?.close();
+  releasePageScroll();
   selectedScenarioId.value = "";
 }
 function onModalCancel(event: Event) { event.preventDefault(); closeModal(); }
+onBeforeUnmount(releasePageScroll);
 async function downloadWorkbook() {
   downloading.value = true;
   downloadError.value = "";
@@ -116,8 +126,8 @@ async function downloadWorkbook() {
 
     <details v-if="detail.documentAnalysis" class="report-done__requirements"><summary>요구사항 분석 및 커버리지 상세 보기 →</summary><RequirementDocumentPanel :document="detail.documentAnalysis" /><RequirementCoverage :analysis-id="analysis.id" :document="detail.documentAnalysis" :tests="detail.generatedTests" :runs="detail.testRuns" can-run @changed="emit('changed')" /></details>
 
-    <dialog v-if="selectedScenarioId && snapshot" ref="modalRef" class="report-done__dialog" aria-labelledby="report-scenario-title" @cancel="onModalCancel">
-      <header><div><h2 id="report-scenario-title">시나리오 상세 보기</h2><p>실행 단계와 예상 결과를 확인한 뒤 필요한 경우 수정할 수 있습니다.</p></div><button type="button" class="secondary-button" @click="closeModal">닫기</button></header>
+    <dialog v-if="selectedScenarioId && snapshot" ref="modalRef" class="report-done__dialog" aria-labelledby="report-scenario-title" @cancel="onModalCancel" @close="releasePageScroll">
+      <header><div><h2 id="report-scenario-title">시나리오 상세 보기</h2><p>실행 단계와 예상 결과를 확인한 뒤 필요한 경우 수정할 수 있습니다.</p></div><button type="button" class="report-done__close" aria-label="닫기" @click="closeModal">×</button></header>
       <GeneratedTestList ref="editorRef" :analysis-id="analysis.id" :tests="detail.generatedTests" :snapshot="snapshot" :runs="detail.testRuns" modal-mode complete-mode :focus-test-id="selectedScenarioId" @changed="emit('changed')" />
     </dialog>
   </div>
@@ -128,5 +138,11 @@ async function downloadWorkbook() {
 </style>
 <style scoped>
 .report-done__section :deep(.suite-panel){margin-bottom:16px;padding:0;border:0;background:transparent;box-shadow:none}.report-done__section :deep(.suite-panel__head){display:flex;align-items:center;margin-bottom:12px}.report-done__section :deep(.suite-panel__head h3){margin:0;font-size:var(--fs-body)}.report-done__section :deep(.suite-panel__head p){color:var(--text-3);font-size:var(--fs-small)}.report-done__section :deep(.suite-panel__head button){border-color:var(--border);border-radius:var(--r-pill);background:var(--bg);color:var(--ink);font-size:var(--fs-small);font-weight:var(--fw-medium);box-shadow:none}.report-done__section :deep(.suite-item){padding:16px;border:1px solid var(--border);border-radius:var(--r-card);background:var(--bg);box-shadow:none}.report-done__section :deep(.suite-item__main){align-items:center}.report-done__section :deep(.suite-item__title strong){font-size:var(--fs-body);font-weight:var(--fw-semibold)}.report-done__section :deep(.suite-item__main .scenario-button--primary){border:1px solid var(--border);border-radius:var(--r-pill);background:var(--bg);color:var(--ink);font-size:var(--fs-small);font-weight:var(--fw-medium);box-shadow:none}.report-done__section :deep(.suite-summary){display:flex;align-items:center;gap:12px}.report-done__section :deep(.suite-summary__metrics){display:flex;gap:8px}.report-done__section :deep(.suite-summary__metrics div){display:flex;gap:3px;padding:0;border:0;background:none}.report-done__section :deep(.suite-summary__status){border:0;background:none;color:var(--ink)}.report-done__section :deep(.suite-summary__meta){color:var(--text-3)}.report-done__section :deep(.suite-panel__empty){padding:16px;border:1px dashed var(--border);border-radius:var(--r-card);color:var(--text-3);font-size:var(--fs-small)}
-.report-done__dialog :deep(.scenario-modal-content .scenario-modal__edit){padding:0;border:0;background:none;color:var(--ink);font-family:var(--font-sans);font-size:var(--fs-small);font-weight:var(--fw-medium);cursor:pointer}.report-done__dialog :deep(.scenario-modal-content .scenario-card>.muted){margin-left:0;background:var(--surface);color:var(--text-2)}.report-done__dialog :deep(.scenario-modal-content .scenario-step){border-color:var(--border);border-radius:var(--r-card);background:var(--surface)}.report-done__dialog :deep(.scenario-modal-content .scenario-steps){border-color:var(--border);border-radius:var(--r-card);background:var(--surface)}
+.report-done__dialog :deep(.scenario-modal-content .scenario-card>.muted){margin-left:0;background:var(--surface);color:var(--text-2)}.report-done__dialog :deep(.scenario-modal-content .scenario-step){border-color:var(--border);border-radius:var(--r-card);background:var(--surface)}.report-done__dialog :deep(.scenario-modal-content .scenario-steps){border-color:var(--border);border-radius:var(--r-card);background:var(--surface)}
+.report-done__dialog::backdrop{background:color-mix(in srgb,var(--ink) 20%,transparent)}
+.report-done__close{display:grid;min-width:var(--h-btn-sm);min-height:var(--h-btn-sm);flex:none;align-self:flex-start;place-items:center;padding:0;border:0;background:none;color:var(--ink);font-family:var(--font-sans);font-size:var(--fs-h1);line-height:var(--lh-h1);font-weight:var(--fw-regular);cursor:pointer}
+.report-done__dialog :deep(.scenario-card__identity){flex:1;min-width:0}
+.report-done__dialog :deep(.test-card__head>.tag){flex:none;white-space:nowrap;font-family:var(--font-sans)}
+.report-done__dialog :deep(.scenario-card>.scenario-actions>button){width:auto;min-height:var(--h-btn);padding:0 14px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:var(--fs-small);font-weight:var(--fw-medium);box-shadow:none;cursor:pointer}
+.report-done__dialog :deep(.scenario-card>.scenario-actions>button:disabled){opacity:.5;cursor:not-allowed}
 </style>

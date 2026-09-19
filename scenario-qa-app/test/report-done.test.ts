@@ -24,4 +24,12 @@ describe("3단계 완료 보고서", () => {
     expect(report).toContain("<DefectManager");
     expect(report).toContain("<IssueList");
   });
+
+  it("시나리오 모달의 닫기, 배경 스크롤, 상태 뱃지와 액션 모양을 제어한다", () => {
+    expect(report).toContain('aria-label="닫기"');
+    expect(report).toContain('document.documentElement.style.overflow = "hidden"');
+    expect(report).toContain("onBeforeUnmount(releasePageScroll)");
+    expect(report).toContain(".test-card__head>.tag");
+    expect(report).toContain(".scenario-card>.scenario-actions>button");
+  });
 });
