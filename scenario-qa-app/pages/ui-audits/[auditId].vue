@@ -10,6 +10,7 @@ const ruleLabel=(rule:string)=>({horizontal_overflow:"가로 넘침",clipped_con
 const stateLabel=(state:string)=>({initial:"최초 화면",scroll_25:"스크롤 25%",scroll_50:"스크롤 50%",scroll_75:"스크롤 75%",scroll_100:"페이지 하단",scroll_up:"위로 스크롤"}[state]||state);
 const comparison = computed(() => data.value?.audit.summary?.comparison);
 const comparisonLabel = computed(() => ({matched:"유사",review:"검토 필요",different:"차이 큼"}[comparison.value?.status || "review"]));
+const completedDate = computed(() => data.value?.audit.completedAt ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short" }).format(new Date(data.value.audit.completedAt)) : "");
 const initialArtifact = computed(() => data.value?.audit.artifacts.find((artifact) => artifact.state === "initial"));
 const diffArtifact = computed(() => data.value?.audit.artifacts.find((artifact) => artifact.state === "design_diff"));
 const pageArtifacts = computed(() => data.value?.audit.artifacts.filter((artifact) => artifact.state !== "design_diff") || []);
@@ -33,6 +34,10 @@ const refreshing = ref(false);
 const defectDrafts = reactive<Partial<Record<UiAuditRule, { open: boolean; title: string; severity: QaDefectSeverity; note: string }>>>({});
 const creatingDefect = ref<UiAuditRule>();
 const defectMessage = ref("");
+const openDefectForm = (rule: UiAuditRule) => {
+  for (const draft of Object.values(defectDrafts)) if (draft) draft.open = false;
+  if (defectDrafts[rule]) defectDrafts[rule]!.open = true;
+};
 watch(issueGroups, (groups) => {
   for (const group of groups) {
     if (reviewDrafts[group.rule]) continue;
@@ -111,30 +116,42 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
   <div class="section ui-audit-detail">
     <div v-if="error" class="error-box">UI 점검 작업을 불러오지 못했습니다.</div>
     <template v-else-if="data">
-      <div class="section-head">
-        <div><p class="eyebrow">UI QA · 규칙 점검</p><h1>{{ data.audit.name }}</h1><p>{{ data.audit.targetUrl }}</p></div>
+      <div class="section-head" :class="{ 'ui-audit-result-head': data.audit.status === 'completed' }">
+        <div>
+          <NuxtLink v-if="data.audit.status === 'completed'" class="ui-audit-back" to="/analyses">← 목록 이전</NuxtLink>
+          <p v-else class="eyebrow">UI QA · 규칙 점검</p>
+          <h1>{{ data.audit.status === 'completed' ? 'UI 점검' : data.audit.name }}</h1>
+          <p v-if="data.audit.status === 'completed'" class="ui-audit-result-meta"><span class="ui-audit-result-url">{{ data.audit.targetUrl }}</span><span>{{ completedDate }}</span><span>✓ 완료</span><span>규칙 기반 점검 완료 · 화면 크기 {{ data.audit.viewport.width }}×{{ data.audit.viewport.height }} · 디자인 비교 {{ comparison ? comparisonLabel : '없음' }}</span></p>
+          <p v-else>{{ data.audit.targetUrl }}</p>
+        </div>
         <div class="page-actions">
           <button v-if="data.audit.status === 'completed'" type="button" class="secondary-button" :disabled="exporting" @click="downloadWorkbook">{{ exporting ? "생성 중" : "엑셀 다운로드" }}</button>
           <button type="button" class="secondary-button ui-audit-refresh-button" :disabled="refreshing" :aria-busy="refreshing" @click="refreshAudit">
-            <span class="ui-audit-refresh-button__icon" aria-hidden="true">↻</span>
-            {{ refreshing ? "새로고침 중..." : "상태 새로고침" }}
+            <span v-if="data.audit.status !== 'completed'" class="ui-audit-refresh-button__icon" aria-hidden="true">↻</span>
+            {{ refreshing ? "새로고침 중..." : data.audit.status === 'completed' ? '새로고침' : '상태 새로고침' }}
           </button>
           <p v-if="exportMessage" class="input-help">{{ exportMessage }}</p>
         </div>
       </div>
-      <section class="card ui-audit-queued">
-        <span class="status-pill">{{ statusLabel }}</span>
-        <h2>{{ data.audit.currentMessage }}</h2>
-        <dl>
+      <nav v-if="data.audit.status === 'completed'" class="ui-audit-result-nav" aria-label="UI 점검 결과 메뉴">
+        <a href="#ui-audit-summary">결과 요약</a><a v-if="data.audit.issues.length" href="#ui-audit-guide">수정 가이드</a><a v-if="pageArtifacts.length" href="#ui-audit-captures">화면 기록</a>
+      </nav>
+      <section :id="data.audit.status === 'completed' ? 'ui-audit-summary' : undefined" :class="data.audit.status === 'completed' ? 'ui-audit-complete' : 'card ui-audit-queued'">
+        <template v-if="data.audit.status !== 'completed'">
+          <span class="status-pill">{{ statusLabel }}</span>
+          <h2>{{ data.audit.currentMessage }}</h2>
+        </template>
+        <dl v-if="data.audit.status !== 'completed'">
           <div><dt>화면 크기</dt><dd>{{ data.audit.viewport.label }} · {{ data.audit.viewport.width }}×{{ data.audit.viewport.height }}</dd></div>
           <div><dt>디자인 비교</dt><dd>{{ comparison ? comparisonLabel : data.audit.reference ? "원본 등록됨 · 비교 대기" : "원본 없음" }}</dd></div>
         </dl>
         <div v-if="data.audit.summary" class="ui-audit-metrics">
-          <span><strong>{{ data.audit.summary.issueCount }}</strong>전체 문제</span>
-          <span><strong>{{ data.audit.summary.highCount }}</strong>높음</span>
-          <span><strong>{{ data.audit.summary.mediumCount }}</strong>보통</span>
-          <span><strong>{{ data.audit.summary.lowCount }}</strong>낮음</span>
+          <span><small>전체 문제</small><strong>{{ data.audit.summary.issueCount }}</strong></span>
+          <span><small>높음</small><strong>{{ data.audit.summary.highCount }}</strong></span>
+          <span><small>보통</small><strong>{{ data.audit.summary.mediumCount }}</strong></span>
+          <span><small>낮음</small><strong>{{ data.audit.summary.lowCount }}</strong></span>
         </div>
+        <p v-if="data.audit.status === 'completed' && !comparison" class="ui-audit-complete__note">디자인 원본이 없어 규칙 기반 검사만 수행했습니다. 원본을 등록하면 디자인 비교를 함께 추가할 수 있습니다.</p>
 
         <section v-if="comparison" class="ui-design-comparison">
           <header>
@@ -159,13 +176,13 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
             </figure>
             <figure v-if="diffArtifact?.signedUrl">
               <img :src="diffArtifact.signedUrl" alt="디자인과 실제 페이지의 차이 강조 화면">
-              <figcaption>차이 강조 · 붉은 영역 확인</figcaption>
+              <figcaption>차이 강조 화면</figcaption>
             </figure>
           </div>
           <p>이 비교는 검토 보조 지표입니다. 동적 콘텐츠와 폰트 렌더링 차이는 결함으로 자동 등록하지 않습니다.</p>
         </section>
 
-        <section v-if="data.audit.issues.length" class="ui-remediation">
+        <section v-if="data.audit.issues.length" id="ui-audit-guide" class="ui-remediation">
           <header class="ui-remediation__head">
             <div>
               <span>수정 가이드</span>
@@ -201,10 +218,10 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
             <p v-if="defectMessage" aria-live="polite">{{ defectMessage }}</p>
           </div>
           <div v-if="visibleIssueGroups.length" class="ui-remediation__groups">
-            <article v-for="group in visibleIssueGroups" :key="group.rule" class="ui-remediation-group">
+            <article v-for="(group, index) in visibleIssueGroups" :key="group.rule" class="ui-remediation-group">
               <header>
-                <span :class="`severity severity--${group.severity}`">{{ severityLabel(group.severity) }}</span>
-                <div><h3>{{ UI_AUDIT_RULE_GUIDANCE[group.rule].label }}</h3><p>영향 요소 {{ group.affectedCount }}개 · 확인 화면 {{ group.stateCount }}개</p></div>
+                <span class="ui-remediation-group__number">{{ String(index + 1).padStart(2, '0') }}</span>
+                <div><h3>{{ UI_AUDIT_RULE_GUIDANCE[group.rule].label }} <span :class="`severity severity--${group.severity}`">{{ severityLabel(group.severity) }}</span></h3><p>영향 요소 {{ group.affectedCount }}개 · 확인 화면 {{ group.stateCount }}개</p></div>
                 <strong>{{ priorityLabel(group.severity) }}</strong>
               </header>
               <div class="ui-remediation-guide">
@@ -234,7 +251,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
                   </select>
                 </label>
                 <label>메모
-                  <textarea v-model="reviewDrafts[group.rule]!.note" maxlength="1000" rows="2" placeholder="판정 근거를 선택적으로 입력하세요." @input="clearReviewFeedback(group.rule)" />
+                  <input v-model="reviewDrafts[group.rule]!.note" maxlength="1000" placeholder="판정 근거를 선택적으로 입력하세요." @input="clearReviewFeedback(group.rule)">
                 </label>
                 <div class="ui-remediation-review__actions">
                   <button type="button" class="secondary-button" :disabled="reviewFeedback[group.rule] === 'saving'" @click="saveReview(group.rule)">{{ reviewFeedback[group.rule] === "saving" ? "저장 중..." : "저장" }}</button>
@@ -244,7 +261,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
               <div v-if="uiAuditReviewStatusFor(data.audit.reviews, group.rule) === 'fix_required'" class="ui-defect-registration">
                 <NuxtLink v-if="data.audit.reviews.find(item => item.rule === group.rule)?.defectId" class="secondary-button" :to="`/defects?defect=${data.audit.reviews.find(item => item.rule === group.rule)?.defectId}`">결함 등록됨 · 상세 보기</NuxtLink>
                 <template v-else-if="defectDrafts[group.rule]">
-                  <button v-if="!defectDrafts[group.rule]!.open" type="button" class="secondary-button" @click="defectDrafts[group.rule]!.open = true">결함으로 등록</button>
+                  <button v-if="!defectDrafts[group.rule]!.open" type="button" class="secondary-button" @click="openDefectForm(group.rule)">결함으로 등록</button>
                   <form v-else class="ui-defect-registration__form" @submit.prevent="createDefect(group.rule)">
                     <label>결함 제목<input v-model="defectDrafts[group.rule]!.title" required maxlength="160"></label>
                     <label>심각도<select v-model="defectDrafts[group.rule]!.severity"><option value="critical">치명적</option><option value="high">높음</option><option value="medium">보통</option><option value="low">낮음</option></select></label>
@@ -258,7 +275,7 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
           <p v-else class="empty">선택한 조건에 해당하는 문제가 없습니다.</p>
         </section>
         <p v-else-if="data.audit.status === 'completed'" class="notice">자동 판정 가능한 UI 규칙 위반을 발견하지 못했습니다.</p>
-        <section v-if="pageArtifacts.length" class="ui-audit-captures" aria-labelledby="ui-audit-captures-title">
+        <section v-if="pageArtifacts.length" id="ui-audit-captures" class="ui-audit-captures" aria-labelledby="ui-audit-captures-title">
           <header>
             <div><span>화면 기록</span><h3 id="ui-audit-captures-title">점검 과정에서 수집한 전체 화면</h3></div>
             <p>페이지를 단계별로 스크롤하며 검사한 화면입니다. 각 문제의 상세 영역에서도 관련 화면을 확인할 수 있습니다.</p>
@@ -280,3 +297,92 @@ onBeforeUnmount(() => { if (pollTimer) clearTimeout(pollTimer); });
     </template>
   </div>
 </template>
+
+<style scoped>
+.ui-audit-detail { width: 100%; max-width: none; margin-top: 0; }
+.ui-audit-result-head { align-items: end; margin-bottom: var(--section-gap); }
+.ui-audit-result-head h1 { margin: 6px 0 0; font-size: var(--fs-h1); line-height: var(--lh-h1); }
+.ui-audit-back { color: var(--text-3); font-size: var(--fs-meta); text-decoration: none; }
+.ui-audit-result-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 0; color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-result-meta > span + span::before { content: '/'; margin-right: 8px; color: var(--border); }
+.ui-audit-result-url { color: var(--ink); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.ui-audit-result-head .page-actions { flex: none; }
+.ui-audit-result-head .secondary-button { min-height: var(--h-btn-sm); font-size: var(--fs-small); }
+.ui-audit-result-head .ui-audit-refresh-button { border-color: var(--border); color: var(--ink); box-shadow: none; font-weight: var(--fw-medium); }
+.ui-audit-result-head .secondary-button:hover:not(:disabled),.ui-audit-complete .secondary-button:hover:not(:disabled) { border-color: var(--ink); background: var(--bg); color: var(--ink); box-shadow: none; }
+.ui-audit-result-nav { display: flex; width: max-content; gap: 2px; margin-bottom: var(--section-gap); padding: 4px; border-radius: var(--r-pill); background: var(--surface-2); }
+.ui-audit-result-nav a { padding: 5px 12px; border-radius: var(--r-pill); color: var(--text-3); font-size: var(--fs-small); text-decoration: none; }
+.ui-audit-result-nav a:first-child { border: 1px solid var(--border); background: var(--bg); color: var(--ink); }
+.ui-audit-complete { display: grid; gap: var(--section-gap); }
+.ui-audit-complete .ui-audit-metrics { gap: 0; overflow: hidden; border-radius: var(--r-card); background: var(--surface); }
+.ui-audit-complete .ui-audit-metrics span { display: flex; flex-direction: column; align-items: start; gap: 6px; padding: var(--panel-pad); border: 0; border-left: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--ink); }
+.ui-audit-complete .ui-audit-metrics span:first-child { border: 0; background: transparent; }
+.ui-audit-complete .ui-audit-metrics small { color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-audit-metrics strong { font-size: var(--fs-kpi); line-height: var(--lh-kpi); font-weight: var(--fw-semibold); }
+.ui-audit-complete__note { margin: -12px 0 0; color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation,.ui-audit-complete .ui-audit-captures,.ui-audit-complete .ui-design-comparison { margin: 0; padding: var(--report-gap) 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: var(--bg); }
+.ui-audit-complete .ui-remediation__head > div > span,.ui-audit-complete .ui-audit-captures > header span { color: var(--text-4); font-family: var(--font-mono); font-size: var(--fs-meta); font-weight: var(--fw-regular); letter-spacing: 0; }
+.ui-audit-complete .ui-remediation__head h3,.ui-audit-complete .ui-audit-captures > header h3 { margin: 4px 0 0; font-size: var(--fs-h2); line-height: var(--lh-h2); font-weight: var(--fw-semibold); }
+.ui-audit-complete .ui-remediation__head p,.ui-audit-complete .ui-audit-captures > header p { color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation__head > strong { padding: 0; border: 0; background: none; color: var(--text-3); font-size: var(--fs-meta); font-weight: var(--fw-regular); }
+.ui-audit-complete .ui-remediation__filters { position: static; width: max-content; gap: 8px; padding: 0; border: 0; background: none; box-shadow: none; }
+.ui-audit-complete .ui-remediation__filters label { gap: 4px; color: var(--text-3); font-size: var(--fs-meta); font-weight: var(--fw-regular); }
+.ui-audit-complete .ui-remediation__filters select { min-height: var(--h-btn-sm); border-color: var(--border); border-radius: var(--r-pill); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-review-summary { justify-content: end; margin-top: -46px; }
+.ui-audit-complete .ui-review-summary span { border: 0; color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-review-summary span strong { order: 1; font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-group { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--bg); box-shadow: none; }
+.ui-audit-complete .ui-remediation-group > header { grid-template-columns: 28px minmax(0,1fr) auto; gap: 12px; padding: var(--panel-pad); border: 0; border-left: 0; }
+.ui-remediation-group__number { color: var(--text-4); font-family: var(--font-mono); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-group > header h3 { margin: 0; font-size: var(--fs-h3); line-height: var(--lh-h3); font-weight: var(--fw-semibold); }
+.ui-audit-complete .ui-remediation-group > header p,.ui-audit-complete .ui-remediation-group > header > strong { color: var(--text-3); font-size: var(--fs-meta); font-weight: var(--fw-regular); }
+.ui-audit-complete .severity { display: inline; padding: 0; border: 0; background: none; color: var(--ink); font-size: var(--fs-small); font-weight: var(--fw-medium); }
+.ui-audit-complete .severity--high,.ui-audit-complete .ui-remediation-group:has(.severity--high) > header > strong { font-weight: var(--fw-semibold); }
+.ui-audit-complete .severity--low,.ui-audit-complete .ui-remediation-group:has(.severity--low) > header > strong { color: var(--text-3); font-weight: var(--fw-regular); }
+.ui-audit-complete .ui-remediation-group:has(.severity--medium) > header > strong { color: var(--ink); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-guide { gap: var(--field-gap); padding: 0 var(--panel-pad); background: none; }
+.ui-audit-complete .ui-remediation-guide > div { padding: var(--inner-card-pad); border-radius: var(--r-inner); background: var(--surface); }
+.ui-audit-complete .ui-remediation-guide small { color: var(--text-3); font-size: var(--fs-meta); font-weight: var(--fw-regular); letter-spacing: 0; }
+.ui-audit-complete .ui-remediation-guide p { margin-top: 6px; color: var(--text-2); font-size: var(--fs-small); line-height: var(--lh-small); }
+.ui-audit-complete .ui-remediation-group > details { margin: 0 var(--panel-pad); border: 0; border-bottom: 1px solid var(--border); }
+.ui-audit-complete .ui-remediation-group > details > summary { padding: var(--inner-card-pad) 0; color: var(--ink); font-size: var(--fs-small); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-elements { padding: 0 0 var(--inner-card-pad); }
+.ui-audit-complete .ui-remediation-elements > article { border-color: var(--border); background: var(--bg); }
+.ui-audit-complete .ui-remediation-elements > article > header strong { font-size: var(--fs-body); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-elements > article > header small { color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-elements > article > p { color: var(--text-2); font-size: var(--fs-small); line-height: var(--lh-small); }
+.ui-audit-complete .ui-remediation-elements code { font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-elements dl { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; border: 0; }
+.ui-audit-complete .ui-remediation-elements dl > div { font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-elements dl dt { color: var(--text-3); }
+.ui-audit-complete .ui-remediation-elements dl dd { font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-evidence { grid-template-columns: 200px minmax(0,1fr); border-color: var(--border); background: var(--surface); }
+.ui-audit-complete .ui-remediation-evidence:hover { border-color: var(--ink); background: var(--surface); }
+.ui-audit-complete .ui-remediation-evidence img { width: 200px; height: 112px; background: var(--bg); }
+.ui-audit-complete .ui-remediation-evidence span strong { font-size: var(--fs-small); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-evidence span small { color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-elements dl > div { background: var(--surface); }
+.ui-audit-complete .ui-remediation-review { grid-template-columns: 140px minmax(0,1fr) auto; align-items: center; gap: 8px; padding: var(--inner-card-pad) var(--panel-pad); border: 0; background: var(--bg); }
+.ui-audit-complete .ui-remediation-review label { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: var(--fs-meta); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-remediation-review select,.ui-audit-complete .ui-remediation-review input { min-width: 0; width: 100%; height: var(--h-input-sm); min-height: var(--h-input-sm); border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--bg); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-remediation-review input { padding: 0 12px; }
+.ui-audit-complete .ui-remediation-review__actions { display: flex; align-items: center; gap: 8px; }
+.ui-audit-complete .ui-remediation-review__actions button { min-height: var(--h-btn-sm); }
+.ui-audit-complete .ui-remediation-review__status.is-success,.ui-audit-complete .ui-remediation-review__status.is-error { color: var(--ink); }
+.ui-audit-complete .ui-remediation-review__status { color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete :is(input,select,textarea,summary,button,a):focus-visible,.ui-audit-result-head :is(button,a):focus-visible { outline-color: var(--ink); }
+.ui-audit-complete .ui-defect-registration { border-color: var(--border); }
+.ui-audit-complete .ui-audit-screenshots { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.ui-audit-complete .ui-audit-screenshots figure { border: 0; border-radius: 0; background: var(--bg); }
+.ui-audit-complete .ui-audit-screenshots figure > a { padding: 0; border-radius: var(--r-inner); background: var(--surface); }
+.ui-audit-complete .ui-audit-screenshots img { height: 200px; max-height: none; border-radius: var(--r-inner); background: var(--surface); object-fit: contain; }
+.ui-audit-complete .ui-audit-screenshots figcaption { padding: 8px 0; color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-audit-screenshots figcaption strong { color: var(--ink); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-design-comparison > header span,.ui-audit-complete .ui-design-comparison > p { color: var(--text-3); }
+.ui-audit-complete .ui-design-comparison > header span { font-size: var(--fs-meta); font-weight: var(--fw-medium); }
+.ui-audit-complete .ui-design-comparison__metrics small,.ui-audit-complete .ui-design-comparison__frames figcaption { color: var(--text-3); font-size: var(--fs-meta); }
+.ui-audit-complete .ui-design-comparison__metrics strong { font-size: var(--fs-h2); }
+.ui-audit-complete .ui-design-comparison__metrics span,.ui-audit-complete .ui-design-comparison__frames figure { border-color: var(--border); border-radius: var(--r-inner); background: var(--surface); }
+.ui-audit-complete .ui-design-comparison__frames img { background: var(--surface); }
+.ui-audit-complete .comparison-status { border: 0; background: none; color: var(--ink); }
+</style>
